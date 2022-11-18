@@ -263,10 +263,11 @@ int lastRunROM() {
 					}
 
 					std::string savename = ReplaceAll(filename, typeToReplace, getSavExtension());
-					std::string romFolderNoSlash = ms().romfolder[ms().previousUsedDevice];
+                    std::string saveNameFc = ReplaceAll(filename, typeToReplace, ".sav");
+                    std::string romFolderNoSlash = ms().romfolder[ms().previousUsedDevice];
 					RemoveTrailingSlashes(romFolderNoSlash);
-					mkdir ("saves", 0777);
-					savepath = romFolderNoSlash+"/saves/"+savename;
+					mkdir (("/saves/"+savename).c_str(), 0777);
+                    savepath = "sd:/saves/" + savename + "/" + saveNameFc;
 					if (ms().previousUsedDevice && ms().fcSaveOnSd) {
 						savepath = ReplaceAll(savepath, "fat:/", "sd:/");
 					}

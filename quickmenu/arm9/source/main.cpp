@@ -2516,7 +2516,7 @@ int main(int argc, char **argv) {
 						std::string romFolderNoSlash = romfolder[ms().secondaryDevice];
 						RemoveTrailingSlashes(romFolderNoSlash);
 						mkdir (isHomebrew[ms().secondaryDevice] ? "ramdisks" : ("/saves/"+savename).c_str(), 0777);
-						std::string savepath = "/saves/" + savename + "/" + saveNameFc;
+						std::string savepath = "sd:/saves/" + savename + "/" + saveNameFc;
 						if (sdFound() && ms().secondaryDevice && ms().fcSaveOnSd) {
 							savepath = replaceAll(savepath, "fat:/", "sd:/");
 						}
