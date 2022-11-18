@@ -1591,11 +1591,12 @@ int main(int argc, char **argv) {
 					|| (gameTid[CURPOS][0] == 'D' && unitCode[CURPOS] == 3)) {
 						std::string path = argarray[0];
 						std::string savename = replaceAll(filename, typeToReplace, getSavExtension());
+                        std::string saveNameFc = replaceAll(filename, typeToReplace, ".sav");
 						std::string ramdiskname = replaceAll(filename, typeToReplace, getImgExtension(perGameSettings_ramDiskNo));
 						std::string romFolderNoSlash = ms().romfolder[ms().secondaryDevice];
 						RemoveTrailingSlashes(romFolderNoSlash);
-						mkdir(isHomebrew[CURPOS] ? "ramdisks" : "saves", 0777);
-						std::string savepath = romFolderNoSlash + "/saves/" + savename;
+						mkdir(isHomebrew[CURPOS] ? "ramdisks" : ("/saves/"+savename).c_str(), 0777);
+                        std::string savepath = "/saves/" + savename + "/" + saveNameFc;
 						if (sdFound() && ms().secondaryDevice && ms().fcSaveOnSd) {
 							savepath = replaceAll(savepath, "fat:/", "sd:/");
 						}

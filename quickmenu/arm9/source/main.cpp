@@ -689,9 +689,9 @@ void loadGameOnFlashcard (const char* ndsPath, bool dsGame) {
 		std::string savenameFc = replaceAll(filename, typeToReplace, ".sav");
 		std::string romFolderNoSlash = romfolder[true];
 		RemoveTrailingSlashes(romFolderNoSlash);
-		std::string saveFolder = romFolderNoSlash + "/saves";
+		std::string saveFolder = "/saves/" + savename;
 		mkdir(saveFolder.c_str(), 0777);
-		std::string savepath = romFolderNoSlash + "/saves/" + savename;
+		std::string savepath = "/saves/" + savename + "/" + savenameFc;
 		std::string savepathFc = romFolderNoSlash + "/" + savenameFc;
 		rename(savepath.c_str(), savepathFc.c_str());
 	}
@@ -2511,11 +2511,12 @@ int main(int argc, char **argv) {
 					|| (gameTid[ms().secondaryDevice][0] == 'D' && unitCode[ms().secondaryDevice] == 3)) {
 						std::string path = argarray[0];
 						std::string savename = replaceAll(filename[ms().secondaryDevice], typeToReplace, getSavExtension());
+                        std::string saveNameFc = replaceAll(filename[ms().secondaryDevice], typeToReplace, ".sav");
 						std::string ramdiskname = replaceAll(filename[ms().secondaryDevice], typeToReplace, getImgExtension());
 						std::string romFolderNoSlash = romfolder[ms().secondaryDevice];
 						RemoveTrailingSlashes(romFolderNoSlash);
-						mkdir (isHomebrew[ms().secondaryDevice] ? "ramdisks" : "saves", 0777);
-						std::string savepath = romFolderNoSlash + "/saves/" + savename;
+						mkdir (isHomebrew[ms().secondaryDevice] ? "ramdisks" : ("/saves/"+savename).c_str(), 0777);
+						std::string savepath = "/saves/" + savename + "/" + saveNameFc;
 						if (sdFound() && ms().secondaryDevice && ms().fcSaveOnSd) {
 							savepath = replaceAll(savepath, "fat:/", "sd:/");
 						}
