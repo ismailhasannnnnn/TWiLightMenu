@@ -165,7 +165,7 @@ inline GL_TEXTURE_SIZE_ENUM get_tex_size(int texSize) {
 }
 
 inline const unsigned short *apply_personal_theme(const unsigned short *palette) {
-	return palette + ((useTwlCfg ? *(unsigned short*)0x02000444 : PersonalData->theme) * 16);
+	return palette + (getFavoriteColor() * 16);
 }
 
 unique_ptr<glImage[]> ThemeTextures::loadTexture(int *textureId, const Texture &texture, unsigned int arraySize,
@@ -213,13 +213,6 @@ void ThemeTextures::reloadPalDialogBox() {
 	}
 }
 
-inline bool textureExists(std::string textureName) {
-	return (access((textureName + ".grf").c_str(), F_OK) == 0
-	 || access((textureName + ".png").c_str(), F_OK) == 0
-	 || access((textureName + ".bmp").c_str(), F_OK) == 0
-	);
-}
-
 void ThemeTextures::loadBackgrounds() {
 	// 0: Top, 1: Bottom, 2: Bottom Bubble, 3: Moving, 4: MovingLeft, 5: MovingRight
 
@@ -240,21 +233,19 @@ void ThemeTextures::loadBackgrounds() {
 	}
 	// DSi Theme
 	if (ms().macroMode) {
-		if (textureExists((std::string) TFN_BG_BOTTOMBG_MACRO)) {
+		if (Texture::exists(TFN_BG_BOTTOMBG_MACRO)) {
 			_backgroundTextures.emplace_back(TFN_BG_BOTTOMBG_MACRO, TFN_FALLBACK_BG_BOTTOMBG);
 		} else {
 			_backgroundTextures.emplace_back(TFN_BG_BOTTOMBG, TFN_FALLBACK_BG_BOTTOMBG);
 		}
 
-		if (textureExists((std::string)TFN_BG_BOTTOMBUBBLEBG_MACRO)
-		 || textureExists((std::string)TFN_FALLBACK_BG_BOTTOMBUBBLEBG_MACRO)
-		) {
+		if (Texture::exists(TFN_BG_BOTTOMBUBBLEBG_MACRO)) {
 			_backgroundTextures.emplace_back(TFN_BG_BOTTOMBUBBLEBG_MACRO, TFN_FALLBACK_BG_BOTTOMBUBBLEBG_MACRO);
 		} else {
 			_backgroundTextures.emplace_back(TFN_BG_BOTTOMBUBBLEBG, TFN_FALLBACK_BG_BOTTOMBUBBLEBG);
 		}
 
-		if (ms().theme == TWLSettings::EThemeDSi && textureExists((std::string)TFN_BG_BOTTOMMOVINGBG_MACRO)) {
+		if (ms().theme == TWLSettings::EThemeDSi && Texture::exists(TFN_BG_BOTTOMMOVINGBG_MACRO)) {
 			_backgroundTextures.emplace_back(TFN_BG_BOTTOMMOVINGBG_MACRO, TFN_FALLBACK_BG_BOTTOMMOVINGBG);
 		} else {
 			_backgroundTextures.emplace_back(TFN_BG_BOTTOMMOVINGBG, TFN_FALLBACK_BG_BOTTOMMOVINGBG);
@@ -396,6 +387,8 @@ void ThemeTextures::load3DSTheme() {
 	_startBorderTexture = std::make_unique<Texture>(TFN_GRF_CURSOR, TFN_FALLBACK_GRF_CURSOR);
 	_dialogBoxTexture = std::make_unique<Texture>(TFN_GRF_DIALOGBOX, TFN_FALLBACK_GRF_DIALOGBOX);
 
+	applyUserPaletteToAllGrfTextures();
+
 	if (ms().colorMode == 1) {
 		applyGrayscaleToAllGrfTextures();
 	}
@@ -452,18 +445,7 @@ void ThemeTextures::loadDSiTheme() {
 	_manualIconTexture = std::make_unique<Texture>(TFN_GRF_ICON_MANUAL, TFN_FALLBACK_GRF_ICON_MANUAL);
 
 	// Apply the DSi palette shifts
-	if (tc().startTextUserPalette())
-		_startTextTexture->applyPaletteEffect(effectDSiStartTextPalettes);
-	if (tc().startBorderUserPalette())
-		_startBorderTexture->applyPaletteEffect(effectDSiStartBorderPalettes);
-	if (tc().buttonArrowUserPalette())
-		_buttonArrowTexture->applyPaletteEffect(effectDSiArrowButtonPalettes);
-	if (tc().movingArrowUserPalette())
-		_movingArrowTexture->applyPaletteEffect(effectDSiArrowButtonPalettes);
-	if (tc().launchDotsUserPalette())
-		_launchDotTexture->applyPaletteEffect(effectDSiArrowButtonPalettes);
-	if (tc().dialogBoxUserPalette())
-		_dialogBoxTexture->applyPaletteEffect(effectDSiArrowButtonPalettes);
+	applyUserPaletteToAllGrfTextures();
 
 	if (ms().colorMode == 1) {
 		applyGrayscaleToAllGrfTextures();
@@ -769,8 +751,10 @@ void ThemeTextures::drawProfileName() {
 	int width = usernameFont()->calcWidth(username);
 
 	// Copy to background
-	for (int y = 0; y < usernameFont()->height(); y++) {
-		for (int x = 0; x < width; x++) {
+	for (int y = 0; y < usernameFont()->height() && yPos + y < SCREEN_HEIGHT; y++) {
+		if (yPos + y < 0) continue;
+		for (int x = 0; x < width && xPos + x < SCREEN_WIDTH; x++) {
+			if (xPos + x < 0) continue;
 			int px = FontGraphic::textBuf[1][y * 256 + x];
 			u16 bg = _topBorderBuffer[(yPos + y) * 256 + (xPos + x)];
 			u16 val = px ? alphablend(BG_PALETTE[px], bg, (px % 4) < 2 ? 128 : 224) : bg;
@@ -1303,8 +1287,10 @@ ITCM_CODE void ThemeTextures::drawDateTime(const char *str, int posX, int posY, 
 	int width = max(dateTimeFont()->calcWidth(str), isDate ? _previousDateWidth : _previousTimeWidth);
 
 	// Copy to background
-	for (int y = 0; y < dateTimeFont()->height(); y++) {
-		for (int x = 0; x < width; x++) {
+	for (int y = 0; y < dateTimeFont()->height() && posY + y < SCREEN_HEIGHT; y++) {
+		if (posY + y < 0) continue;
+		for (int x = 0; x < width && posX + x < SCREEN_WIDTH; x++) {
+			if (posX + x < 0) continue;
 			int px = FontGraphic::textBuf[1][y * 256 + x];
 			u16 bg = _topBorderBuffer[(posY + y) * 256 + (posX + x)];
 			u16 val = px ? alphablend(BG_PALETTE[px], bg, (px % 4) < 2 ? 128 : 224) : bg;
@@ -1343,8 +1329,10 @@ ITCM_CODE void ThemeTextures::drawDateTimeMacro(const char *str, int posX, int p
 	int width = max(dateTimeFont()->calcWidth(str), isDate ? _previousDateWidth : _previousTimeWidth);
 
 	// Copy to background
-	for (int y = 0; y < dateTimeFont()->height(); y++) {
-		for (int x = 0; x < width; x++) {
+	for (int y = 0; y < dateTimeFont()->height() && posY + y < SCREEN_HEIGHT; y++) {
+		if (posY + y < 0) continue;
+		for (int x = 0; x < width && posX + x < SCREEN_WIDTH; x++) {
+			if (posX + x < 0) continue;
 			int px = FontGraphic::textBuf[1][y * 256 + x];
 			u16 bg = _topBorderBuffer[(posY + y) * 256 + (posX + x)];
 			u16 val = px ? alphablend(BG_PALETTE[px], bg, (px % 4) < 2 ? 128 : 224) : bg;
@@ -1358,6 +1346,89 @@ ITCM_CODE void ThemeTextures::drawDateTimeMacro(const char *str, int posX, int p
 	} else {
 		_previousTimeWidth = dateTimeFont()->calcWidth(str);
 	}
+}
+
+void ThemeTextures::applyUserPaletteToAllGrfTextures() {
+	if (_bipsTexture && tc().bipsUserPalette())
+		_bipsTexture->applyUserPaletteFile(TFN_PALETTE_BIPS, effectDSiArrowButtonPalettes);
+	if (_boxTexture && tc().boxUserPalette())
+		_boxTexture->applyUserPaletteFile(TFN_PALETTE_BOX, effectDSiArrowButtonPalettes);
+	if (_braceTexture && tc().braceUserPalette())
+		_braceTexture->applyUserPaletteFile(TFN_PALETTE_BRACE, effectDSiArrowButtonPalettes);
+	if (_bubbleTexture && tc().bubbleUserPalette())
+		_bubbleTexture->applyUserPaletteFile(TFN_PALETTE_BUBBLE, effectDSiArrowButtonPalettes);
+	if (_buttonArrowTexture && tc().buttonArrowUserPalette())
+		_buttonArrowTexture->applyUserPaletteFile(TFN_PALETTE_BUTTON_ARROW, effectDSiArrowButtonPalettes);
+	if (_cornerButtonTexture && tc().cornerButtonUserPalette())
+		_cornerButtonTexture->applyUserPaletteFile(TFN_PALETTE_CORNERBUTTON, effectDSiArrowButtonPalettes);
+	if (_dialogBoxTexture && tc().dialogBoxUserPalette())
+		_dialogBoxTexture->applyUserPaletteFile(TFN_PALETTE_DIALOGBOX, effectDSiArrowButtonPalettes);
+	if (_folderTexture && tc().folderUserPalette())
+		_folderTexture->applyUserPaletteFile(TFN_PALETTE_FOLDER, effectDSiArrowButtonPalettes);
+	if (_launchDotTexture && tc().launchDotsUserPalette())
+		_launchDotTexture->applyUserPaletteFile(TFN_PALETTE_LAUNCH_DOT, effectDSiArrowButtonPalettes);
+	if (_movingArrowTexture && tc().movingArrowUserPalette())
+		_movingArrowTexture->applyUserPaletteFile(TFN_PALETTE_MOVING_ARROW, effectDSiArrowButtonPalettes);
+	if (_progressTexture && tc().progressUserPalette())
+		_progressTexture->applyUserPaletteFile(TFN_PALETTE_PROGRESS, effectDSiArrowButtonPalettes);
+	if (_scrollWindowTexture && tc().scrollWindowUserPalette())
+		_scrollWindowTexture->applyUserPaletteFile(TFN_PALETTE_SCROLL_WINDOW, effectDSiArrowButtonPalettes);
+	if (_smallCartTexture && tc().smallCartUserPalette())
+		_smallCartTexture->applyUserPaletteFile(TFN_PALETTE_SMALL_CART, effectDSiArrowButtonPalettes);
+	if (_startBorderTexture && (tc().startBorderUserPalette() || tc().cursorUserPalette())) // same texture variable, different images in dsi/3ds themes
+		_startBorderTexture->applyUserPaletteFile(TFN_PALETTE_START_BORDER, effectDSiStartBorderPalettes);
+	if (_startTextTexture && tc().startTextUserPalette())
+		_startTextTexture->applyUserPaletteFile(TFN_PALETTE_START_TEXT, effectDSiStartTextPalettes);
+	if (_wirelessIconsTexture && tc().wirelessIconsUserPalette())
+		_wirelessIconsTexture->applyUserPaletteFile(TFN_PALETTE_WIRELESSICONS, effectDSiArrowButtonPalettes);
+	
+	if (_boxEmptyTexture && tc().boxUserPalette())
+		_boxEmptyTexture->applyUserPaletteFile(TFN_PALETTE_BOX_EMPTY, effectDSiArrowButtonPalettes);
+	if (_boxFullTexture && tc().boxUserPalette())
+		_boxFullTexture->applyUserPaletteFile(TFN_PALETTE_BOX_EMPTY, effectDSiArrowButtonPalettes);
+
+	if (_iconA26Texture && tc().iconA26UserPalette())
+		_iconA26Texture->applyUserPaletteFile(TFN_PALETTE_ICON_A26, effectDSiArrowButtonPalettes);
+	if (_iconCOLTexture && tc().iconCOLUserPalette())
+		_iconCOLTexture->applyUserPaletteFile(TFN_PALETTE_ICON_COL, effectDSiArrowButtonPalettes);
+	if (_iconGBTexture && tc().iconGBUserPalette())
+		_iconGBTexture->applyUserPaletteFile(TFN_PALETTE_ICON_GB, effectDSiArrowButtonPalettes);
+	if (_iconGBATexture && tc().iconGBAUserPalette())
+		_iconGBATexture->applyUserPaletteFile(TFN_PALETTE_ICON_GBA, effectDSiArrowButtonPalettes);
+	if (_iconGBAModeTexture && tc().iconGBAModeUserPalette())
+		_iconGBAModeTexture->applyUserPaletteFile(TFN_PALETTE_ICON_GBAMODE, effectDSiArrowButtonPalettes);
+	if (_iconGGTexture && tc().iconGGUserPalette())
+		_iconGGTexture->applyUserPaletteFile(TFN_PALETTE_ICON_GG, effectDSiArrowButtonPalettes);
+	if (_iconIMGTexture && tc().iconIMGUserPalette())
+		_iconIMGTexture->applyUserPaletteFile(TFN_PALETTE_ICON_IMG, effectDSiArrowButtonPalettes);
+	if (_iconINTTexture && tc().iconINTUserPalette())
+		_iconINTTexture->applyUserPaletteFile(TFN_PALETTE_ICON_INT, effectDSiArrowButtonPalettes);
+	if (_iconM5Texture && tc().iconM5UserPalette())
+		_iconM5Texture->applyUserPaletteFile(TFN_PALETTE_ICON_M5, effectDSiArrowButtonPalettes);
+	if (_manualIconTexture && tc().iconManualUserPalette())
+		_manualIconTexture->applyUserPaletteFile(TFN_PALETTE_ICON_MANUAL, effectDSiArrowButtonPalettes);
+	if (_iconMDTexture && tc().iconMDUserPalette())
+		_iconMDTexture->applyUserPaletteFile(TFN_PALETTE_ICON_MD, effectDSiArrowButtonPalettes);
+	if (_iconNESTexture && tc().iconNESUserPalette())
+		_iconNESTexture->applyUserPaletteFile(TFN_PALETTE_ICON_NES, effectDSiArrowButtonPalettes);
+	if (_iconNGPTexture && tc().iconNGPUserPalette())
+		_iconNGPTexture->applyUserPaletteFile(TFN_PALETTE_ICON_NGP, effectDSiArrowButtonPalettes);
+	if (_iconPCETexture && tc().iconPCEUserPalette())
+		_iconPCETexture->applyUserPaletteFile(TFN_PALETTE_ICON_PCE, effectDSiArrowButtonPalettes);
+	if (_iconPLGTexture && tc().iconPLGUserPalette())
+		_iconPLGTexture->applyUserPaletteFile(TFN_PALETTE_ICON_PLG, effectDSiArrowButtonPalettes);
+	if (_settingsIconTexture && tc().iconSettingsUserPalette())
+		_settingsIconTexture->applyUserPaletteFile(TFN_PALETTE_ICON_SETTINGS, effectDSiArrowButtonPalettes);
+	if (_iconSGTexture && tc().iconSGUserPalette())
+		_iconSGTexture->applyUserPaletteFile(TFN_PALETTE_ICON_SG, effectDSiArrowButtonPalettes);
+	if (_iconSMSTexture && tc().iconSMSUserPalette())
+		_iconSMSTexture->applyUserPaletteFile(TFN_PALETTE_ICON_SMS, effectDSiArrowButtonPalettes);
+	if (_iconSNESTexture && tc().iconSNESUserPalette())
+		_iconSNESTexture->applyUserPaletteFile(TFN_PALETTE_ICON_SNES, effectDSiArrowButtonPalettes);
+	if (_iconUnknownTexture && tc().iconUnknownUserPalette())
+		_iconUnknownTexture->applyUserPaletteFile(TFN_PALETTE_ICON_UNK, effectDSiArrowButtonPalettes);
+	if (_iconWSTexture && tc().iconWSUserPalette())
+		_iconWSTexture->applyUserPaletteFile(TFN_PALETTE_ICON_WS, effectDSiArrowButtonPalettes);
 }
 
 void ThemeTextures::applyGrayscaleToAllGrfTextures() {
@@ -1424,6 +1495,12 @@ void ThemeTextures::applyGrayscaleToAllGrfTextures() {
 		_boxEmptyTexture->applyPaletteEffect(effectGrayscalePalette);
 	}
 
+	if (_iconA26Texture) {
+		_iconA26Texture->applyPaletteEffect(effectGrayscalePalette);
+	}
+	if (_iconCOLTexture) {
+		_iconCOLTexture->applyPaletteEffect(effectGrayscalePalette);
+	}
 	if (_iconGBTexture) {
 		_iconGBTexture->applyPaletteEffect(effectGrayscalePalette);
 	}
@@ -1436,11 +1513,32 @@ void ThemeTextures::applyGrayscaleToAllGrfTextures() {
 	if (_iconGGTexture) {
 		_iconGGTexture->applyPaletteEffect(effectGrayscalePalette);
 	}
+	if (_iconIMGTexture) {
+		_iconIMGTexture->applyPaletteEffect(effectGrayscalePalette);
+	}
+	if (_iconINTTexture) {
+		_iconINTTexture->applyPaletteEffect(effectGrayscalePalette);
+	}
+	if (_iconM5Texture) {
+		_iconM5Texture->applyPaletteEffect(effectGrayscalePalette);
+	}
 	if (_iconMDTexture) {
 		_iconMDTexture->applyPaletteEffect(effectGrayscalePalette);
 	}
 	if (_iconNESTexture) {
 		_iconNESTexture->applyPaletteEffect(effectGrayscalePalette);
+	}
+	if (_iconNGPTexture) {
+		_iconNGPTexture->applyPaletteEffect(effectGrayscalePalette);
+	}
+	if (_iconPCETexture) {
+		_iconPCETexture->applyPaletteEffect(effectGrayscalePalette);
+	}
+	if (_iconPLGTexture) {
+		_iconPLGTexture->applyPaletteEffect(effectGrayscalePalette);
+	}
+	if (_iconSGTexture) {
+		_iconSGTexture->applyPaletteEffect(effectGrayscalePalette);
 	}
 	if (_iconSMSTexture) {
 		_iconSMSTexture->applyPaletteEffect(effectGrayscalePalette);
@@ -1448,20 +1546,11 @@ void ThemeTextures::applyGrayscaleToAllGrfTextures() {
 	if (_iconSNESTexture) {
 		_iconSNESTexture->applyPaletteEffect(effectGrayscalePalette);
 	}
-	if (_iconPLGTexture) {
-		_iconPLGTexture->applyPaletteEffect(effectGrayscalePalette);
-	}
-	if (_iconA26Texture) {
-		_iconA26Texture->applyPaletteEffect(effectGrayscalePalette);
-	}
-	if (_iconINTTexture) {
-		_iconINTTexture->applyPaletteEffect(effectGrayscalePalette);
-	}
-	if (_iconPCETexture) {
-		_iconPCETexture->applyPaletteEffect(effectGrayscalePalette);
-	}
 	if (_iconUnknownTexture) {
 		_iconUnknownTexture->applyPaletteEffect(effectGrayscalePalette);
+	}
+	if (_iconWSTexture) {
+		_iconWSTexture->applyPaletteEffect(effectGrayscalePalette);
 	}
 }
 

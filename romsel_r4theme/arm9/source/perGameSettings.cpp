@@ -225,7 +225,14 @@ bool showSetDonorRom(u32 arm7size, u32 SDKVersion, bool dsiBinariesFound) {
 	bool usingB4DS = (!dsiFeatures() && ms().secondaryDevice);
 	bool dsiEnhancedMbk = (isDSiMode() && *(u32*)0x02FFE1A0 == 0x00403000 && sys().arm7SCFGLocked());
 
-	return ((usingB4DS || (dsiEnhancedMbk && dsiBinariesFound)) && SDKVersion > 0x5000000	// SDK5 (TWL)
+	return (arm7size == 0x2619C // SDK2.0
+		 || arm7size == 0x262A0
+		 || arm7size == 0x26A60
+		 || arm7size == 0x27218
+		 || arm7size == 0x27224
+		 || arm7size == 0x2724C
+		 || arm7size == 0x27280
+	|| ((usingB4DS || (dsiEnhancedMbk && dsiBinariesFound)) && SDKVersion > 0x5000000	// SDK5 (TWL)
 	 && (arm7size==0x22B40
 	  || arm7size==0x22BCC
 	  || arm7size==0x28F84
@@ -238,7 +245,7 @@ bool showSetDonorRom(u32 arm7size, u32 SDKVersion, bool dsiBinariesFound) {
 	  || arm7size==0x2AF18
 	  || arm7size==0x2B184
 	  || arm7size==0x2B24C
-	  || arm7size==0x2C5B4));
+	  || arm7size==0x2C5B4)));
 }
 
 bool showSetDonorRomDSiWare(u32 arm7size) {
@@ -465,7 +472,8 @@ void perGameSettings (std::string filename) {
 		 || (memcmp(io_dldi_data->friendlyName, "R4TF", 4) == 0)
 		 || (memcmp(io_dldi_data->friendlyName, "R4iDSN", 6) == 0)
 	 	 || (memcmp(io_dldi_data->friendlyName, "R4iTT", 5) == 0)
-		 || (memcmp(io_dldi_data->friendlyName, "Acekard AK2", 0xB) == 0)))*/
+		 || (memcmp(io_dldi_data->friendlyName, "Acekard AK2", 0xB) == 0)
+    	 || (memcmp(io_dldi_data->friendlyName, "Ace3DS+", 7) == 0)))*/
 	|| !ms().secondaryDevice) && !isHomebrew && !isDSiWare
 	&& memcmp(game_TID, "HND", 3) != 0
 	&& memcmp(game_TID, "HNE", 3) != 0);
@@ -571,7 +579,7 @@ void perGameSettings (std::string filename) {
 		}
 		if (ms().secondaryDevice) {
 			perGameOps++;
-			perGameOp[perGameOps] = 14;	// Use nds-bootstrap
+			perGameOp[perGameOps] = 14;	// Game Loader
 		}
 		if ((perGameSettings_useBootstrap == -1 ? ms().useBootstrap : perGameSettings_useBootstrap) || (dsiFeatures() && romUnitCode > 0) || !ms().secondaryDevice) {
 			if (((dsiFeatures() && !bs().b4dsMode) || !ms().secondaryDevice) && !blacklisted_cardReadDma) {
@@ -865,13 +873,13 @@ void perGameSettings (std::string filename) {
 				}
 				break;
 			case 14:
-				printSmall(false, 32, perGameOpYpos, "Use nds-bootstrap:");
+				printSmall(false, 32, perGameOpYpos, "Game Loader:");
 				if (perGameSettings_useBootstrap == -1) {
 					printSmallRightAlign(false, 256-24, perGameOpYpos, "Default");
 				} else if (perGameSettings_useBootstrap == 1) {
-					printSmallRightAlign(false, 256-24, perGameOpYpos, "Yes");
+					printSmallRightAlign(false, 256-24, perGameOpYpos, "nds-bootstrap");
 				} else {
-					printSmallRightAlign(false, 256-24, perGameOpYpos, "No");
+					printSmallRightAlign(false, 256-24, perGameOpYpos, "Kernel");
 				}
 				break;
 		}
@@ -1069,6 +1077,14 @@ void perGameSettings (std::string filename) {
 						 || arm7size == 0x28E54
 						 || arm7size == 0x29EE8) {
 							pathDefine = a7mbk6 == 0x080037C0 ? "DONORTWLONLY0_NDS_PATH" : "DONORTWL0_NDS_PATH"; // SDK5.0
+						} else if (arm7size == 0x2619C
+								 || arm7size == 0x262A0
+								 || arm7size == 0x26A60
+								 || arm7size == 0x27218
+								 || arm7size == 0x27224
+								 || arm7size == 0x2724C
+								 || arm7size == 0x27280) {
+							pathDefine = "DONOR20_NDS_PATH"; // SDK2.0
 						}
 						std::string romFolderNoSlash = ms().romfolder[ms().secondaryDevice];
 						RemoveTrailingSlashes(romFolderNoSlash);

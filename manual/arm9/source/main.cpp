@@ -48,7 +48,6 @@ bool fadeType = false;		// false = out, true = in
 bool fadeSpeed = true;		// false = slow (for DSi launch effect), true = fast
 bool controlTopBright = true;
 bool controlBottomBright = true;
-bool useTwlCfg = false;
 
 extern int bgColor1;
 extern int bgColor2;
@@ -201,29 +200,31 @@ void loadROMselect() {
 	for (int i = 0; i < 25; i++) {
 		swiWaitForVBlank();
 	}
-	chdir(isRunFromSd() ? "sd:/" : "fat:/");
+
+	std::vector<char *> argarray;
 
 	switch (ms().theme) {
 		case TWLSettings::EThemeDSi:
 		case TWLSettings::EThemeHBL:
 		case TWLSettings::EThemeSaturn:
 			if (!ms().showSelectMenu) {
-				runNdsFile("/_nds/TWiLightMenu/mainmenu.srldr", 0, NULL, true, false, false, true, true, false, -1);
+				argarray.push_back((char*)(sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/mainmenu.srldr" : "fat:/_nds/TWiLightMenu/mainmenu.srldr"));
 				break;
 			}
 			// fall through
 		case TWLSettings::ETheme3DS:
-			runNdsFile("/_nds/TWiLightMenu/dsimenu.srldr", 0, NULL, true, false, false, true, true, false, -1);
+			argarray.push_back((char*)(sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/dsimenu.srldr" : "fat:/_nds/TWiLightMenu/dsimenu.srldr"));
 			break;
 		case TWLSettings::EThemeR4:
 		case TWLSettings::EThemeGBC:
-			runNdsFile("/_nds/TWiLightMenu/r4menu.srldr", 0, NULL, true, false, false, true, true, false, -1);
+			argarray.push_back((char*)(sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/r4menu.srldr" : "fat:/_nds/TWiLightMenu/r4menu.srldr"));
 			break;
 		case TWLSettings::EThemeWood:
-			runNdsFile("/_nds/TWiLightMenu/akmenu.srldr", 0, NULL, true, false, false, true, true, false, -1);
+			argarray.push_back((char*)(sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/akmenu.srldr" : "fat:/_nds/TWiLightMenu/akmenu.srldr"));
 			break;
 	}
 
+	runNdsFile(argarray[0], argarray.size(), (const char**)&argarray[0], true, false, false, true, true, false, -1);
 	fadeType = true;	// Fade in from white
 }
 
@@ -250,26 +251,9 @@ void customSleep() {
 }
 
 //---------------------------------------------------------------------------------
-int main(int argc, char **argv) {
+int manualScreen(void) {
 //---------------------------------------------------------------------------------
-	fifoSendValue32(FIFO_PM, PM_REQ_SLEEP_DISABLE);		// Disable sleep mode to prevent unexpected crashes from exiting sleep mode
-	defaultExceptionHandler();
-	sys().initFilesystem("/_nds/TWiLightMenu/manual.srldr");
-	sys().initArm7RegStatuses();
-
-	if (!sys().fatInitOk()) {
-		SetBrightness(0, 0);
-		SetBrightness(1, 0);
-		consoleDemoInit();
-		iprintf("FAT init failed!");
-		stop();
-	}
-
 	keysSetRepeat(25, 25);
-
-	useTwlCfg = (dsiFeatures() && (*(u8*)0x02000400 != 0) && (*(u8*)0x02000401 == 0) && (*(u8*)0x02000402 == 0) && (*(u8*)0x02000404 == 0) && (*(u8*)0x02000448 != 0));
-
-	sysSetCartOwner(BUS_OWNER_ARM9); // Allow arm9 to access GBA ROM
 
 	ms().loadSettings();
 

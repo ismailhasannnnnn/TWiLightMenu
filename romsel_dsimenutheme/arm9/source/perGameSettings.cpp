@@ -270,7 +270,14 @@ bool showSetDonorRom(u32 arm7size, u32 SDKVersion, bool dsiBinariesFound) {
 	bool usingB4DS = (!dsiFeatures() && ms().secondaryDevice);
 	bool dsiEnhancedMbk = (isDSiMode() && *(u32*)0x02FFE1A0 == 0x00403000 && sys().arm7SCFGLocked());
 
-	return ((usingB4DS || (dsiEnhancedMbk && dsiBinariesFound)) && SDKVersion > 0x5000000	// SDK5 (TWL)
+	return (arm7size == 0x2619C // SDK2.0
+		 || arm7size == 0x262A0
+		 || arm7size == 0x26A60
+		 || arm7size == 0x27218
+		 || arm7size == 0x27224
+		 || arm7size == 0x2724C
+		 || arm7size == 0x27280
+	|| ((usingB4DS || (dsiEnhancedMbk && dsiBinariesFound)) && SDKVersion > 0x5000000	// SDK5 (TWL)
 	 && (arm7size==0x22B40
 	  || arm7size==0x22BCC
 	  || arm7size==0x28F84
@@ -283,7 +290,7 @@ bool showSetDonorRom(u32 arm7size, u32 SDKVersion, bool dsiBinariesFound) {
 	  || arm7size==0x2AF18
 	  || arm7size==0x2B184
 	  || arm7size==0x2B24C
-	  || arm7size==0x2C5B4));
+	  || arm7size==0x2C5B4)));
 }
 
 bool showSetDonorRomDSiWare(u32 arm7size) {
@@ -491,7 +498,8 @@ void perGameSettings (std::string filename) {
 		 || (memcmp(io_dldi_data->friendlyName, "R4TF", 4) == 0)
 		 || (memcmp(io_dldi_data->friendlyName, "R4iDSN", 6) == 0)
 	 	 || (memcmp(io_dldi_data->friendlyName, "R4iTT", 5) == 0)
-		 || (memcmp(io_dldi_data->friendlyName, "Acekard AK2", 0xB) == 0)))*/
+		 || (memcmp(io_dldi_data->friendlyName, "Acekard AK2", 0xB) == 0)
+     	 || (memcmp(io_dldi_data->friendlyName, "Ace3DS+", 7) == 0)))*/
 	|| !ms().secondaryDevice) && !isHomebrew[CURPOS] && !isDSiWare[CURPOS]
 	&& memcmp(gameTid[CURPOS], "HND", 3) != 0
 	&& memcmp(gameTid[CURPOS], "HNE", 3) != 0);
@@ -597,7 +605,7 @@ void perGameSettings (std::string filename) {
 		}
 		if (ms().secondaryDevice) {
 			perGameOps++;
-			perGameOp[perGameOps] = 14;	// Use nds-bootstrap
+			perGameOp[perGameOps] = 14;	// Game Loader
 		}
 		if ((perGameSettings_useBootstrap == -1 ? ms().useBootstrap : perGameSettings_useBootstrap) || (dsiFeatures() && unitCode[CURPOS] > 0) || !ms().secondaryDevice) {
 			if (((dsiFeatures() && !bs().b4dsMode) || !ms().secondaryDevice) && !blacklisted_cardReadDma) {
@@ -916,13 +924,13 @@ void perGameSettings (std::string filename) {
 				}
 				break;
 			case 14:
-				printSmall(false, perGameOpStartXpos, perGameOpYpos, STR_USEBOOTSTRAP + ":", startAlign, FontPalette::dialog);
+				printSmall(false, perGameOpStartXpos, perGameOpYpos, STR_GAME_LOADER + ":", startAlign, FontPalette::dialog);
 				if (perGameSettings_useBootstrap == -1) {
 					printSmall(false, perGameOpEndXpos, perGameOpYpos, STR_DEFAULT, endAlign, FontPalette::dialog);
 				} else if (perGameSettings_useBootstrap == 1) {
-					printSmall(false, perGameOpEndXpos, perGameOpYpos, STR_YES, endAlign, FontPalette::dialog);
+					printSmall(false, perGameOpEndXpos, perGameOpYpos, "nds-bootstrap", endAlign, FontPalette::dialog);
 				} else {
-					printSmall(false, perGameOpEndXpos, perGameOpYpos, STR_NO, endAlign, FontPalette::dialog);
+					printSmall(false, perGameOpEndXpos, perGameOpYpos, STR_KERNEL, endAlign, FontPalette::dialog);
 				}
 				break;
 		}
@@ -1125,10 +1133,18 @@ void perGameSettings (std::string filename) {
 						 || arm7size == 0x28E54
 						 || arm7size == 0x29EE8) {
 							pathDefine = a7mbk6[CURPOS] == 0x080037C0 ? "DONORTWLONLY0_NDS_PATH" : "DONORTWL0_NDS_PATH"; // SDK5.0
+						} else if (arm7size == 0x2619C
+								 || arm7size == 0x262A0
+								 || arm7size == 0x26A60
+								 || arm7size == 0x27218
+								 || arm7size == 0x27224
+								 || arm7size == 0x2724C
+								 || arm7size == 0x27280) {
+							pathDefine = "DONOR20_NDS_PATH"; // SDK2.0
 						}
 						std::string romFolderNoSlash = ms().romfolder[ms().secondaryDevice];
 						RemoveTrailingSlashes(romFolderNoSlash);
-						const char *bootstrapinipath = isRunFromSd() ? BOOTSTRAP_INI : BOOTSTRAP_INI_FC;
+						const char *bootstrapinipath = sys().isRunFromSD() ? BOOTSTRAP_INI : BOOTSTRAP_INI_FC;
 						CIniFile bootstrapini(bootstrapinipath);
 						bootstrapini.SetString("NDS-BOOTSTRAP", pathDefine, romFolderNoSlash+"/"+filename);
 						bootstrapini.SaveIniFile(bootstrapinipath);

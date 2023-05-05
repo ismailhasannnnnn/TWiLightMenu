@@ -18,7 +18,7 @@
 
 void createEsrbSplash(void) {
 	if (!ms().esrbRatingScreen || isHomebrew[CURPOS] || (gameTid[CURPOS][3] != 'E' && gameTid[CURPOS][3] != 'O' && gameTid[CURPOS][3] != 'T' && gameTid[CURPOS][3] != 'W')) {
-		remove(isRunFromSd() ? "sd:/_nds/nds-bootstrap/esrb.bin" : "fat:/_nds/nds-bootstrap/esrb.bin");
+		remove(sys().isRunFromSD() ? "sd:/_nds/nds-bootstrap/esrb.bin" : "fat:/_nds/nds-bootstrap/esrb.bin");
 		return;
 	}
 
@@ -30,16 +30,15 @@ void createEsrbSplash(void) {
 	CIniFile esrbInfo("nitro:/ESRB.ini");
 	std::string rating = esrbInfo.GetString(gameTid3, "Rating", "");
 	if (rating == "") {
-		remove(isRunFromSd() ? "sd:/_nds/nds-bootstrap/esrb.bin" : "fat:/_nds/nds-bootstrap/esrb.bin");
+		remove(sys().isRunFromSD() ? "sd:/_nds/nds-bootstrap/esrb.bin" : "fat:/_nds/nds-bootstrap/esrb.bin");
 		return;
 	}
 
 	std::string descriptors = esrbInfo.GetString(gameTid3, "Descriptors en", "");
 
-	char esrbImagePath[64];
-	if (rating == "E" && descriptors == "") {
+	bool sideways = false;
+	if ((rating == "E" || rating == "EC" || rating == "RP") && descriptors == "") {
 		// Search for games starting sideways
-		bool sideways = false;
 		// TODO: If the list gets large enough, switch to bsearch().
 		for (unsigned int i = 0; i < sizeof(sidewaysGameList)/sizeof(sidewaysGameList[0]); i++) {
 			if (memcmp(gameTid[CURPOS], sidewaysGameList[i], 3) == 0) {
@@ -48,16 +47,18 @@ void createEsrbSplash(void) {
 				break;
 			}
 		}
+	}
+
+	char esrbImagePath[64];
+	if (rating == "E" && descriptors == "") {
 		sprintf(esrbImagePath, "nitro:/graphics/ESRB/E-%s.png", sideways ? "side" : "nodesc"); 
+	} else if (rating == "EC" || rating == "RP") {
+		sprintf(esrbImagePath, "nitro:/graphics/ESRB/%s%s.png", rating.c_str(), sideways ? "-side" : ""); 
 	} else {
 		sprintf(esrbImagePath, "nitro:/graphics/ESRB/%s.png", rating.c_str()); 
 	}
-	logPrint("ESRB Rating: ");
-	logPrint(rating.c_str());
-	logPrint("\n");
-	logPrint("ESRB Descriptors: ");
-	logPrint(descriptors.c_str());
-	logPrint("\n");
+	logPrint("ESRB Rating: %s\n", rating.c_str());
+	logPrint("ESRB Descriptors: %s\n", descriptors.c_str());
 
 	DC_FlushAll();
 
@@ -115,9 +116,9 @@ void createEsrbSplash(void) {
 		esrbDescFontDeinit();
 	}
 
-	mkdir(isRunFromSd() ? "sd:/_nds/nds-bootstrap" : "fat:/_nds/nds-bootstrap", 0777);
+	mkdir(sys().isRunFromSD() ? "sd:/_nds/nds-bootstrap" : "fat:/_nds/nds-bootstrap", 0777);
 
-	FILE *file = fopen(sdFound() ? "sd:/_nds/nds-bootstrap/esrb.bin" : "fat:/_nds/nds-bootstrap/esrb.bin", "wb");
+	FILE *file = fopen(sys().isRunFromSD() ? "sd:/_nds/nds-bootstrap/esrb.bin" : "fat:/_nds/nds-bootstrap/esrb.bin", "wb");
 	fwrite(tex().bmpImageBuffer(), sizeof(u16), 256*192, file);
 	fclose(file);
 }

@@ -212,7 +212,7 @@ void clearTitle(int num) {
 	cachedTitle[num] = blankTitle;
 }
 
-void getGameInfo(bool isDir, const char *name, int num) {
+void getGameInfo(bool isDir, const char *name, int num, bool fromArgv) {
 	if (num == -1)
 		num = 40;
 
@@ -220,35 +220,50 @@ void getGameInfo(bool isDir, const char *name, int num) {
 	bnriconPalLoaded[num] = 0;
 	bnriconframenumY[num] = 0;
 	bannerFlip[num] = GL_FLIP_NONE;
-	bnriconisDSi[num] = false;
 	bnrWirelessIcon[num] = 0;
-	customIcon[num] = 0;
 	isDSiWare[num] = false;
 	isHomebrew[num] = false;
 	isModernHomebrew[num] = false;
 	requiresRamDisk[num] = false;
 	requiresDonorRom[num] = false;
-	infoFound[num] = false;
+	if (!fromArgv) {
+		bnriconisDSi[num] = false;
+		customIcon[num] = 0;
+		infoFound[num] = false;
+	}
 
-	if (ms().showCustomIcons) {
+	if (ms().showCustomIcons && customIcon[num] < 2) {
 		sNDSBannerExt &banner = bnriconTile[num];
+		bool argvHadPng = customIcon[num] == 1;
+		u8 iconCopy[512];
+		u16 paletteCopy[16];
+		if (argvHadPng) { // custom png icon from argv
+			// copy the icon and palette before they get overwritten
+			memcpy(iconCopy, banner.icon, sizeof(iconCopy));
+			memcpy(paletteCopy, banner.palette, sizeof(paletteCopy));
+		}
 		toncset(&banner, 0, sizeof(sNDSBannerExt));
 		bool customIconGood = false;
 
 		// First try banner bin
 		snprintf(customIconPath, sizeof(customIconPath), "%s:/_nds/TWiLightMenu/icons/%s.bin", sdFound() ? "sd" : "fat", name);
-		customIcon[num] = (access(customIconPath, F_OK) == 0);
-		if (customIcon[num]) {
+		if (access(customIconPath, F_OK) == 0) {
 			customIcon[num] = 2; // custom icon is a banner bin
 			FILE *file = fopen(customIconPath, "rb");
 			if (file) {
 				size_t read = fread(&banner, 1, sizeof(sNDSBannerExt), file);
 				fclose(file);
 
+				// restore png icon
+				if (argvHadPng) {
+					memcpy(banner.icon, iconCopy, sizeof(iconCopy));
+					memcpy(banner.palette, paletteCopy, sizeof(paletteCopy));
+				}
+
 				if (read >= NDS_BANNER_SIZE_ORIGINAL) {
 					customIconGood = true;
 
-					if (ms().animateDsiIcons && read == NDS_BANNER_SIZE_DSi) {
+					if (!argvHadPng && ms().animateDsiIcons && read == NDS_BANNER_SIZE_DSi) {
 						u16 crc16 = swiCRC16(0xFFFF, banner.dsi_icon, 0x1180);
 						if (banner.crc[3] == crc16) { // Check if CRC16 is valid
 							bnriconisDSi[num] = true;
@@ -270,7 +285,7 @@ void getGameInfo(bool isDir, const char *name, int num) {
 					infoFound[num] = true;
 				}
 			}
-		} else {
+		} else if (customIcon[num] == 0) {
 			// If no banner bin, try png
 			snprintf(customIconPath, sizeof(customIconPath), "%s:/_nds/TWiLightMenu/icons/%s.png", sdFound() ? "sd" : "fat", name);
 			customIcon[num] = (access(customIconPath, F_OK) == 0);
@@ -344,9 +359,10 @@ void getGameInfo(bool isDir, const char *name, int num) {
 
 		// open the argv file
 		fp = fopen(name, "rb");
-		if (fp == NULL) {
+		if (!fp) {
 			clearTitle(num);
-			clearBannerSequence(num);
+			if (customIcon[num] != 2)
+				clearBannerSequence(num);
 			fclose(fp);
 			return;
 		}
@@ -381,58 +397,52 @@ void getGameInfo(bool isDir, const char *name, int num) {
 				if (rc != 0) {
 					// stat failed
 					clearTitle(num);
-					clearBannerSequence(num);
+					if (customIcon[num] != 2)
+						clearBannerSequence(num);
 				} else if (S_ISDIR(st.st_mode)) {
 					// this is a directory!
 					clearTitle(num);
-					clearBannerSequence(num);
+					if (customIcon[num] != 2)
+						clearBannerSequence(num);
 				} else {
-					getGameInfo(false, p, num);
+					getGameInfo(false, p, num, true);
 				}
 			} else {
 				// this is not an nds/app file!
 				clearTitle(num);
-				clearBannerSequence(num);
+				if (customIcon[num] != 2)
+					clearBannerSequence(num);
 			}
 		} else {
 			clearTitle(num);
-			clearBannerSequence(num);
+			if (customIcon[num] != 2)
+				clearBannerSequence(num);
 		}
 		// clean up the allocated line
 		free(line);
 	} else if (extension(name, {".nds", ".dsi", ".ids", ".srl", ".app"})) {
 		// this is an nds/app file!
 		FILE *fp;
-		int ret;
 
 		// open file for reading info
 		fp = fopen(name, "rb");
-		if (fp == NULL) {
+		if (!fp) {
 			clearTitle(num);
-			clearBannerSequence(num); // banner sequence
+			if (customIcon[num] != 2)
+				clearBannerSequence(num); // banner sequence
 			fclose(fp);
 			return;
 		}
 
 		sNDSHeaderExt ndsHeader;
 
-		ret = fseek(fp, 0, SEEK_SET);
-		if (ret == 0)
-			ret = fread(&ndsHeader, sizeof(ndsHeader), 1, fp); // read if seek succeed
-		else
-			ret = 0; // if seek fails set to !=1
-
-		if (ret != 1) {
+		if (!fread(&ndsHeader, sizeof(ndsHeader), 1, fp)) {
 			// try again, but using regular header size
-			ret = fseek(fp, 0, SEEK_SET);
-			if (ret == 0)
-				ret = fread(&ndsHeader, 0x160, 1, fp); // read if seek succeed
-			else
-				ret = 0; // if seek fails set to !=1
-
-			if (ret != 1) {
+			fseek(fp, 0, SEEK_SET);
+			if (!fread(&ndsHeader, 0x160, 1, fp)) {
 				clearTitle(num);
-				clearBannerSequence(num);
+				if (customIcon[num] != 2)
+					clearBannerSequence(num);
 				fclose(fp);
 				return;
 			}
@@ -458,6 +468,7 @@ void getGameInfo(bool isDir, const char *name, int num) {
 			if (ndsHeader.arm7executeAddress >= 0x037F0000 && ndsHeader.arm7destination >= 0x037F0000) {
 				if ((ndsHeader.arm9binarySize == 0xC9F68 && ndsHeader.arm7binarySize == 0x12814)	// Colors! v1.1
 				|| (ndsHeader.arm9binarySize == 0x1B0864 && ndsHeader.arm7binarySize == 0xDB50)	// Mario Paint Composer DS v2 (Bullet Bill)
+				|| (ndsHeader.arm9binarySize == 0xE78FC && ndsHeader.arm7binarySize == 0xF068)		// SnowBros v2.2
 				|| (ndsHeader.arm9binarySize == 0xD45C0 && ndsHeader.arm7binarySize == 0x2B7C)		// ikuReader v0.058
 				|| (ndsHeader.arm9binarySize == 0x7A124 && ndsHeader.arm7binarySize == 0xEED0)		// PPSEDS r11
 				|| (ndsHeader.arm9binarySize == 0x54620 && ndsHeader.arm7binarySize == 0x1538)		// XRoar 0.24fp3
@@ -495,8 +506,10 @@ void getGameInfo(bool isDir, const char *name, int num) {
 				if (ndsHeader.gameCode[0] == 'H' && ndsHeader.arm7binarySize < 0xC000 && ndsHeader.arm7idestination == 0x02E80000) {
 					requiresDonorRom[num] += 100;
 				}
-			} else if (ndsHeader.gameCode[0] != 'D' && a7mbk6[num] == 0x080037C0 && ms().secondaryDevice && (!dsiFeatures() || bs().b4dsMode)) {
+			} else if (ndsHeader.gameCode[0] != 'D' && memcmp(ndsHeader.gameCode, "KCX", 3) != 0 && memcmp(ndsHeader.gameCode, "KAV", 3) != 0 && memcmp(ndsHeader.gameCode, "KNK", 3) != 0 && a7mbk6[num] == 0x080037C0 && ms().secondaryDevice && (!dsiFeatures() || bs().b4dsMode)) {
 				requiresDonorRom[num] = 51; // DSi-Enhanced ROM required
+			} else if (memcmp(ndsHeader.gameCode, "AYI", 3) == 0 && ndsHeader.arm7binarySize == 0x25F70) {
+				requiresDonorRom[num] = 20; // SDK2.0 ROM required for Yoshi Touch & Go (Europe)
 			}
 		}
 
@@ -532,21 +545,11 @@ void getGameInfo(bool isDir, const char *name, int num) {
 
 			return;
 		}
-		ret = fseek(fp, ndsHeader.bannerOffset, SEEK_SET);
-		if (ret == 0)
-			ret = fread(&ndsBanner, sizeof(ndsBanner), 1, fp); // read if seek succeed
-		else
-			ret = 0; // if seek fails set to !=1
-
-		if (ret != 1) {
+		fseek(fp, ndsHeader.bannerOffset, SEEK_SET);
+		if (!fread(&ndsBanner, sizeof(ndsBanner), 1, fp)) {
 			// try again, but using regular banner size
-			ret = fseek(fp, ndsHeader.bannerOffset, SEEK_SET);
-			if (ret == 0)
-				ret = fread(&ndsBanner, NDS_BANNER_SIZE_ORIGINAL, 1, fp); // read if seek succeed
-			else
-				ret = 0; // if seek fails set to !=1
-
-			if (ret != 1) {
+			fseek(fp, ndsHeader.bannerOffset, SEEK_SET);
+			if (!fread(&ndsBanner, NDS_BANNER_SIZE_ORIGINAL, 1, fp)) {
 				fclose(fp);
 
 				// If no custom icon, display as unknown

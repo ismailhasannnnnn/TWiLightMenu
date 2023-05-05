@@ -25,6 +25,7 @@
 #include <fat.h>
 #include <sys/stat.h>
 #include <limits.h>
+#include <vector>
 
 #include <string.h>
 #include <unistd.h>
@@ -53,30 +54,33 @@ int main(int argc, char **argv) {
 	REG_SCFG_CLK = 0x85;					// TWL clock speed
 	REG_SCFG_EXT = 0x8307F100;				// Extended memory, 32-bit VRAM bus, etc.
 
+	//consoleDemoInit();
+
 	bool isRegularDS = fifoGetValue32(FIFO_USER_07);
 
-	bool sdFound = false;
+	//iprintf("Initing flashcard...\n");
 	bool flashcardFound = fatMountSimple("fat", dldiGetInternal());
-	bool primaryIsFat = (access("fat:/_nds/primary", F_OK) == 0);
-	if ((isDSiMode() || (!isRegularDS && REG_SCFG_EXT != 0)) && !primaryIsFat) {
+	if (isDSiMode() || (!isRegularDS && REG_SCFG_EXT != 0)) {
 		extern const DISC_INTERFACE __my_io_dsisd;
-		sdFound = fatMountSimple("sd", &__my_io_dsisd);
+		//iprintf("Initing SD...\n");
+		fatMountSimple("sd", &__my_io_dsisd);
 	}
+	bool primaryIsSd = (access("sd:/_nds/primary", F_OK) == 0 || access("fat:/_nds/TWiLightMenu/main.srldr", F_OK) != 0);
 	if (REG_SCFG_EXT != 0) {
-		FILE* twlCfgFile = fopen(!primaryIsFat ? "sd:/_nds/TWiLightMenu/16KBcache.bin" : "fat:/_nds/TWiLightMenu/16KBcache.bin", "rb");
+		FILE* twlCfgFile = fopen(primaryIsSd ? "sd:/_nds/TWiLightMenu/16KBcache.bin" : "fat:/_nds/TWiLightMenu/16KBcache.bin", "rb");
 		fread((void*)0x02400000, 1, 0x4000, twlCfgFile);
 		fclose(twlCfgFile);
-	}
-	if (sdFound) {
-		sdFound = (access("sd:/_nds/TWiLightMenu/main.srldr", F_OK) == 0);
 	}
 
 	if (/* !sdFound && */ !flashcardFound) {
 		consoleDemoInit();
 		printf ("FAT init failed!\n");
 	} else {
-		int err = 0;
-		err = runNdsFile ((sdFound ? "sd:/_nds/TWiLightMenu/main.srldr" : "fat:/_nds/TWiLightMenu/main.srldr"), 0, NULL);
+		vector<char *> argarray;
+		argarray.push_back((char*)(primaryIsSd ? "sd:/_nds/TWiLightMenu/main.srldr" : "fat:/_nds/TWiLightMenu/main.srldr"));
+
+		//iprintf(sdFound ? "Running from SD...\n" : "Running from flashcard...\n");
+		int err = runNdsFile (argarray[0], argarray.size(), (const char**)&argarray[0]);
 
 		consoleDemoInit();
 

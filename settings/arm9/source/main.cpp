@@ -45,8 +45,6 @@
 #define UNLAUNCH_BG_DIRECTORY "/_nds/TWiLightMenu/unlaunch/backgrounds/"
 #define FONT_DIRECTORY "/_nds/TWiLightMenu/extras/fonts/"
 
-bool useTwlCfg = false;
-
 //bool widescreenEffects = false;
 
 int currentTheme = 0;
@@ -167,21 +165,27 @@ void rebootTWLMenuPP()
 void loadMainMenu()
 {
 	logPrint("Opening DS Classic Menu...\n");
-	runNdsFile("/_nds/TWiLightMenu/mainmenu.srldr", 0, NULL, true, false, false, true, true, false, -1);
+
+	vector<char *> argarray;
+	argarray.push_back((char*)(sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/mainmenu.srldr" : "fat:/_nds/TWiLightMenu/mainmenu.srldr"));
+
+	runNdsFile(argarray[0], argarray.size(), (const char**)&argarray[0], true, false, false, true, true, false, -1);
+	fadeType = true;	// Fade in from white
 }
 
 void loadROMselect()
 {
+	vector<char *> argarray;
+
 	/*if (ms().theme == TWLSettings::EThemeWood) {
-		logPrint("Opening Wood theme...\n");
-		runNdsFile("/_nds/TWiLightMenu/akmenu.srldr", 0, NULL, true, false, false, true, true);
-	} else*/ if (ms().theme == TWLSettings::EThemeR4 || ms().theme == TWLSettings::EThemeGBC) {
-		logPrint("Opening R4 Original or GameBoy Color theme...\n");
-		runNdsFile("/_nds/TWiLightMenu/r4menu.srldr", 0, NULL, true, false, false, true, true, false, -1);
+		argarray.push_back((char*)(sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/akmenu.srldr" : "fat:/_nds/TWiLightMenu/akmenu.srldr"));
+	} else */if (ms().theme == TWLSettings::EThemeR4 || ms().theme == TWLSettings::EThemeGBC) {
+		argarray.push_back((char*)(sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/r4menu.srldr" : "fat:/_nds/TWiLightMenu/r4menu.srldr"));
 	} else {
-		logPrint("Opening DSi, 3DS, Saturn, or HBL theme...\n");
-		runNdsFile("/_nds/TWiLightMenu/dsimenu.srldr", 0, NULL, true, false, false, true, true, false, -1);
+		argarray.push_back((char*)(sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/dsimenu.srldr" : "fat:/_nds/TWiLightMenu/dsimenu.srldr"));
 	}
+	runNdsFile(argarray[0], argarray.size(), (const char**)&argarray[0], true, false, false, true, true, false, -1);
+	fadeType = true;	// Fade in from white
 }
 
 
@@ -375,50 +379,56 @@ std::optional<Option> opt_font_select(void)
 	return Option(STR_FONTSEL, STR_AB_SETFONT, Option::Str(&ms().font), fontList);
 }
 
+std::string keyString(u16 pressed) {
+	std::string keys = "";
+
+	if (pressed & KEY_L)
+		keys += " ";
+	if (pressed & KEY_R)
+		keys += " ";
+	if (pressed & KEY_UP)
+		keys += " ";
+	if (pressed & KEY_DOWN)
+		keys += " ";
+	if (pressed & KEY_LEFT)
+		keys += " ";
+	if (pressed & KEY_RIGHT)
+		keys += " ";
+	if (pressed & KEY_START)
+		keys += "START ";
+	if (pressed & KEY_SELECT)
+		keys += "SELECT ";
+	if (pressed & KEY_A)
+		keys += " ";
+	if (pressed & KEY_B)
+		keys += " ";
+	if (pressed & KEY_X)
+		keys += " ";
+	if (pressed & KEY_Y)
+		keys += " ";
+	if (pressed & KEY_TOUCH)
+		keys += STR_TOUCH + " ";
+
+	return keys.substr(0, keys.size() - 1); // Remove trailing space
+}
+
 void opt_set_hotkey(void) {
 	clearScroller();
 	bool updateText = true;
 	u16 held = 0, set = 0, timer = 0;
+	int buttonsHeld = 0;
 	std::string keys = "";
-	while (timer < 60) {
+	while (timer < 60 || !(buttonsHeld >= 2 || set == KEY_B)) {
 		if (updateText) {
-			keys = "";
-			if (set & KEY_L)
-				keys += " ";
-			if (set & KEY_R)
-				keys += " ";
-			if (set & KEY_UP)
-				keys += " ";
-			if (set & KEY_DOWN)
-				keys += " ";
-			if (set & KEY_LEFT)
-				keys += " ";
-			if (set & KEY_RIGHT)
-				keys += " ";
-			if (set & KEY_START)
-				keys += "START ";
-			if (set & KEY_SELECT)
-				keys += "SELECT ";
-			if (set & KEY_A)
-				keys += " ";
-			if (set & KEY_B)
-				keys += " ";
-			if (set & KEY_X)
-				keys += " ";
-			if (set & KEY_Y)
-				keys += " ";
-			if (set & KEY_TOUCH)
-				keys += STR_TOUCH + " ";
-
-			// Remove trailing space
-			keys = keys.substr(0, keys.size() - 1);
-
 			clearText(false);
 			if (ms().rtl())
 				printLarge(false, 256 - 4, 0, STR_HOLD_1S_SET, Alignment::right);
 			else
 				printLarge(false, 4, 0, STR_HOLD_1S_SET);
+
+			keys = keyString(set);
 			printSmall(false, 0, 48, keys, Alignment::center);
+			printSmall(false, 0, 170 - calcSmallFontHeight(STR_HOLD_1S_DETAILS), STR_HOLD_1S_DETAILS, Alignment::center);
 			updateText = false;
 		}
 
@@ -437,18 +447,28 @@ void opt_set_hotkey(void) {
 			timer = 0;
 			set = held;
 			updateText = true;
+			buttonsHeld = 0;
+			for(int i = 0; i < 16; i++) {
+				if(set & BIT(i))
+					buttonsHeld++;
+			}
 		}
 	}
 
-	bs().bootstrapHotkey = set;
+	// Holding *only* B cancels
+	if(set == KEY_B) {
+		keys = keyString(bs().bootstrapHotkey);
+	} else {
+		bs().bootstrapHotkey = set;
+	}
 
-	mmEffectEx(currentTheme==4 ? &snd().snd_saturn_select : &snd().snd_select);
+	mmEffectEx(currentTheme == 4 ? &snd().snd_saturn_select : &snd().snd_select);
 
 	clearText(false);
 	if (ms().rtl())
-		printLarge(false, 256 - 4, 0, STR_HOTKEY_SET, Alignment::right);
+		printLarge(false, 256 - 4, 0, set == KEY_B ? STR_HOTKEY_SETTING_CANCELLED : STR_HOTKEY_SET, Alignment::right);
 	else
-		printLarge(false, 4, 0, STR_HOTKEY_SET);
+		printLarge(false, 4, 0, set == KEY_B ? STR_HOTKEY_SETTING_CANCELLED : STR_HOTKEY_SET);
 	printSmall(false, 0, 48, keys, Alignment::center);
 	do {
 		scanKeys();
@@ -758,28 +778,9 @@ void customSleep() {
 }
 
 //---------------------------------------------------------------------------------
-int main(int argc, char **argv)
+int settingsMode(void)
 {
-	//---------------------------------------------------------------------------------
-
-//#pragma region init
-
-	defaultExceptionHandler();
-	fifoSendValue32(FIFO_PM, PM_REQ_SLEEP_DISABLE);		// Disable sleep mode to prevent unexpected crashes from exiting sleep mode
-	sys().initFilesystem("/_nds/TWiLightMenu/settings.srldr");
-	sys().initArm7RegStatuses();
-	ms();
-
-	useTwlCfg = (dsiFeatures() && (*(u8*)0x02000400 != 0) && (*(u8*)0x02000401 == 0) && (*(u8*)0x02000402 == 0) && (*(u8*)0x02000404 == 0) && (*(u8*)0x02000448 != 0));
-
-	if (!sys().fatInitOk()) {
-		graphicsInit();
-		fontInit();
-		fadeType = true;
-		printSmall(false, 4, 4, "fatinitDefault failed!");
-		stop();
-	}
-
+//---------------------------------------------------------------------------------
 	ms().loadSettings();
 	gs().loadSettings();
 	bs().loadSettings();
@@ -807,7 +808,7 @@ int main(int argc, char **argv)
 		logPrint(widescreenFound ? "Widescreen found\n" : "Widescreen not found\n");
 	}
 
-	bool sharedFound = (access("sd:/shared2", F_OK) == 0);
+	const bool sharedFound = (access("sd:/shared1", F_OK) == 0);
 
 	//widescreenEffects = (ms().wideScreen && widescreenFound);
 
@@ -1069,7 +1070,7 @@ int main(int argc, char **argv)
 
 	if (flashcardFound() && (dsiFeatures() || sdFound())) {
 		if (sdFound() && (!isDSiMode() || (dsiFeatures() && !sys().arm7SCFGLocked()))) {
-			bootstrapPage.option("S1SD: "+STR_USEBOOTSTRAP, STR_DESCRIPTION_USEBOOTSTRAP, Option::Bool(&ms().useBootstrap), {STR_YES, STR_NO}, {true, false});
+			bootstrapPage.option("S1SD: "+STR_GAMELOADER, STR_DESCRIPTION_GAMELOADER, Option::Bool(&ms().useBootstrap), {"nds-bootstrap", STR_KERNEL}, {true, false});
 			if (dsiFeatures()) {
 				bootstrapPage
 					.option(STR_FCSAVELOCATION, STR_DESCRIPTION_FCSAVELOCATION, Option::Bool(&ms().fcSaveOnSd), {STR_CONSOLE_SD, STR_SLOT_1_SD}, {true, false})
@@ -1078,10 +1079,10 @@ int main(int argc, char **argv)
 		} else if (isDSiMode()) {
 			bootstrapPage.option(STR_B4DSMODE, STR_DESCRIPTION_B4DSMODE, Option::Int(&bs().b4dsMode), {STR_OFF, STR_4MB_RAM, STR_8MB_RAM}, {0, 1, 2});
 		} else {
-			bootstrapPage.option(STR_USEBOOTSTRAP, STR_DESCRIPTION_USEBOOTSTRAP, Option::Bool(&ms().useBootstrap), {STR_YES, STR_NO}, {true, false});
+			bootstrapPage.option(STR_GAMELOADER, STR_DESCRIPTION_GAMELOADER, Option::Bool(&ms().useBootstrap), {"nds-bootstrap", STR_KERNEL}, {true, false});
 		}
 	} else if (io_dldi_data->ioInterface.features & FEATURE_SLOT_NDS && !(dsiFeatures() || sdFound())) {
-		bootstrapPage.option(STR_USEBOOTSTRAP, STR_DESCRIPTION_USEBOOTSTRAP, Option::Bool(&ms().useBootstrap), {STR_YES, STR_NO}, {true, false});
+		bootstrapPage.option(STR_GAMELOADER, STR_DESCRIPTION_GAMELOADER, Option::Bool(&ms().useBootstrap), {"nds-bootstrap", STR_KERNEL}, {true, false});
 	}
 
 	if (widescreenFound) {
@@ -1190,7 +1191,6 @@ int main(int argc, char **argv)
 
 	SettingsPage gamesPage(STR_GAMESAPPS_SETTINGS);
 
-	using TDSiWareBooter = TWLSettings::TDSiWareBooter;
 	using TGbaBooter = TWLSettings::TGbaBooter;
 	using TColSegaEmulator = TWLSettings::TColSegaEmulator;
 	using TCpcEmulator = TWLSettings::TCpcEmulator;

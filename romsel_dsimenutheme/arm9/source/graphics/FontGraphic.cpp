@@ -92,10 +92,7 @@ char16_t FontGraphic::arabicForm(char16_t current, char16_t prev, char16_t next)
 }
 
 FontGraphic::FontGraphic(const char* path, bool useExpansionPak) : useExpansionPak(useExpansionPak) {
-	/*logPrint("FontGraphic::FontGraphic(");
-	logPrint(path);
-	logPrint(", false)\n");
-	logPrint("\n");*/
+	// logPrint("FontGraphic::FontGraphic(%s, false)\n\n", path);
 
 	FILE *file = fopen(path, "rb");
 	if (file) {
@@ -166,7 +163,7 @@ FontGraphic::FontGraphic(const char* path, bool useExpansionPak) : useExpansionP
 		u32 locPAMC, mapType;
 		fread(&locPAMC, 4, 1, file);
 
-		while (locPAMC < fileSize) {
+		while (locPAMC && locPAMC < fileSize) {
 			u16 firstChar, lastChar;
 			fseek(file, locPAMC, SEEK_SET);
 			fread(&firstChar, 2, 1, file);
@@ -244,7 +241,7 @@ u16 FontGraphic::getCharIndex(char16_t c) {
 std::u16string FontGraphic::utf8to16(std::string_view text) {
 	std::u16string out;
 	for (uint i=0;i<text.size();) {
-		char16_t c;
+		char16_t c = 0;
 		if (!(text[i] & 0x80)) {
 			c = text[i++];
 		} else if ((text[i] & 0xE0) == 0xC0) {

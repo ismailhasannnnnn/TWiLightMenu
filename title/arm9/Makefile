@@ -8,6 +8,8 @@ endif
 
 include $(DEVKITARM)/ds_rules
 
+CURRENT_SCREEN_MODE := 0
+
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output
 # BUILD is the directory where object files & intermediate files will be placed
@@ -37,7 +39,7 @@ CFLAGS	:=	-g -Wall -O2\
 		-ffast-math \
 		$(ARCH)
 
-CFLAGS	+=	$(INCLUDE) -DARM9
+CFLAGS	+=	$(INCLUDE) -DARM9 -DSTANDALONE -DCURRENT_SCREEN_MODE=$(CURRENT_SCREEN_MODE)
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++17
 
 ASFLAGS	:=	-g $(ARCH)
@@ -136,14 +138,14 @@ $(OUTPUT).elf	:	$(OFILES)
 #---------------------------------------------------------------------------------
 soundbank.bin : $(AUDIOFILES)
 #---------------------------------------------------------------------------------
-	@mmutil $^ -d -o../../nitrofiles/soundbank.bin -hsoundbank.h
+	mmutil $^ -d -osoundbank.bin -hsoundbank.h
 
 #---------------------------------------------------------------------------------
 # rule to build soundbank from music files
 #---------------------------------------------------------------------------------
 soundbank_bday.bin : $(AUDIOFILESBDAY)
 #---------------------------------------------------------------------------------
-	@mmutil $^ -d -o../../nitrofiles/soundbank_bday.bin -hsoundbank_bday.h
+	mmutil $^ -d -osoundbank_bday.bin -hsoundbank_bday.h
 
 #---------------------------------------------------------------------------------
 %.bin.o	:	%.bin

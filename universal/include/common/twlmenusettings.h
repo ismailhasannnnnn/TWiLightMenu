@@ -138,7 +138,8 @@ public:
 		EAmEDSLaunch = 22,
 		ECrocoDSLaunch = 23,
 		ETunaViDSLaunch = 24,
-		EImageLaunch = 25
+		EImageLaunch = 25,
+		E3DSLaunch = 26
 	};
 
 	enum TConsoleModel : int
@@ -340,6 +341,7 @@ public:
 	bool slot1AccessSD;
 	bool slot1SCFGUnlock;
 	bool slot1TouchMode;
+	bool ezFlashRam;
 	int limitedMode;
 	bool dontShowDSiWareInDSModeWarning;
 	TDSiWareBooter dsiWareBooter;

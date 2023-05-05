@@ -29,6 +29,8 @@
 ---------------------------------------------------------------------------------*/
 #include <nds.h>
 
+#define SD_IRQ_STATUS (*(vu32*)0x400481C)
+
 void my_installSystemFIFO(void);
 
 //---------------------------------------------------------------------------------
@@ -110,6 +112,10 @@ int main() {
 	while (!exitflag) {
 		if ((REG_KEYINPUT & (KEY_SELECT | KEY_START | KEY_L | KEY_R)) == 0) {
 			exitflag = true;
+		}
+		if (*(u32*)0x02FFFD0C == 0x54534453) { // 'SDST'
+			fifoSendValue32(FIFO_USER_04, SD_IRQ_STATUS);
+			*(u32*)0x02FFFD0C = 0;
 		}
 		// fifocheck();
 		swiWaitForVBlank();

@@ -67,8 +67,8 @@ TWLSettings::TWLSettings()
 	sysRegion = ERegionDefault;
 	launcherApp = -1;
 	secondaryAccess = false;
-	previousUsedDevice = false;
-	secondaryDevice = false;
+	previousUsedDevice = !sys().isRunFromSD();
+	secondaryDevice = !sys().isRunFromSD();
 	fcSaveOnSd = false;
 
 	flashcard = EDSTTClone;
@@ -101,6 +101,7 @@ TWLSettings::TWLSettings()
 	slot1AccessSD = false;
 	slot1SCFGUnlock = false;
 	slot1TouchMode = false;
+	ezFlashRam = false;
 	limitedMode = 0;
 	dontShowDSiWareInDSModeWarning = false;
 	dsiWareBooter = EDSiWareBootstrap;
@@ -114,7 +115,7 @@ TWLSettings::TWLSettings()
 	// ak_theme = "zelda";
 	// ak_zoomIcons = true;
 
-	useBootstrap = isDSiMode();
+	useBootstrap = true;
 	btsrpBootloaderDirect = false;
 	bootstrapFile = EReleaseBootstrap;
 
@@ -137,7 +138,7 @@ TWLSettings::TWLSettings()
 
 void TWLSettings::loadSettings()
 {
-	if (!isRunFromSd()) {
+	if (!sys().isRunFromSD()) {
 		settingsinipath = DSIMENUPP_INI_FC; // Fallback to .ini path on flashcard, if TWLMenu++ is not found on SD card
 	}
 
@@ -277,6 +278,7 @@ void TWLSettings::loadSettings()
 	slot1AccessSD = settingsini.GetInt("SRLOADER", "SLOT1_ENABLESD", slot1AccessSD);
 	slot1SCFGUnlock = settingsini.GetInt("SRLOADER", "SLOT1_SCFG_UNLOCK", slot1SCFGUnlock);
 	slot1TouchMode = settingsini.GetInt("SRLOADER", "SLOT1_TOUCH_MODE", slot1TouchMode);
+	ezFlashRam = settingsini.GetInt("SRLOADER", "EZ_FLASH_RAM", ezFlashRam);
 	limitedMode = settingsini.GetInt("SRLOADER", "LIMITED_MODE", limitedMode);
 	dontShowDSiWareInDSModeWarning = settingsini.GetInt("SRLOADER", "DONT_SHOW_DSIWARE_IN_DS_MODE_WARNING", dontShowDSiWareInDSModeWarning);
 	dsiWareBooter = (TDSiWareBooter)settingsini.GetInt("SRLOADER", "DSIWARE_BOOTER", dsiWareBooter);

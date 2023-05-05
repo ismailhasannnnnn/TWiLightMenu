@@ -5,6 +5,10 @@ ifeq ($(strip $(DEVKITARM)),)
 $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
 endif
 
+ifeq ($(strip $(PROJECT)),)
+export PROJECT	:=	$(CURDIR)/../
+endif
+
 ifneq (,$(shell which python3))
 PYTHON	:= python3
 else ifneq (,$(shell which python2))
@@ -59,7 +63,7 @@ dist:	all autoboot
 	@cp $(TARGET)_acekard2.arm9.elf ../7zfile/debug/$(TARGET)_acekard2.arm9.elf
 	@cp $(TARGET)_r4idsn.arm9.elf ../7zfile/debug/$(TARGET)_r4idsn.arm9.elf
 
-.ONESHELL:
+.SILENT: autoboot
 autoboot:
 	### Special carts first
 	#### Acekard 2, 2.1, 2i
@@ -111,7 +115,7 @@ autoboot:
 	
 	#### SuperCard DSONE
 	ndstool -c SCFW.SC -7 $(TARGET)_fc.arm7.elf -9 $(TARGET)_fc.arm9.elf -h 0x200 -g "ENG0" -b icon.bmp "TWiLight Menu++;Rocket Robz"
-	dlditool flashcart_specifics/DLDI/DSONESDSC.dldi SCFW.SC
+	dlditool flashcart_specifics/DLDI/scds3.dldi SCFW.SC
 	mkdir -p "../7zfile/Flashcard users/Autoboot/SuperCard DSONE/"
 	mv SCFW.SC "../7zfile/Flashcard users/Autoboot/SuperCard DSONE/SCFW.SC"
 	
@@ -127,7 +131,7 @@ autoboot:
 
 	# N5
 	cp booter_fc.nds _DS_MENU.dat
-	dlditool flashcart_specifics/DLDI/m3r4_r4tf.dldi _DS_MENU.dat
+	dlditool flashcart_specifics/DLDI/r4tf_sdhc.dldi _DS_MENU.dat
 	mv _DS_MENU.dat "../7zfile/Flashcard users/Autoboot/N5/_DS_MENU.dat"
 
 	#### EDGE (TODO: Find out how to encrypt the .dat file)
@@ -151,7 +155,7 @@ autoboot:
 	#### iSmart Premium
 	##### research done entirely by devkitPro
 	cp booter_fc.nds ismat.dat
-	dlditool flashcart_specifics/DLDI/Mat.dldi ismat.dat
+	dlditool flashcart_specifics/DLDI/mati.dldi ismat.dat
 	mkdir -p "../7zfile/Flashcard users/Autoboot/iSmart Premium/system/"
 	mv ismat.dat "../7zfile/Flashcard users/Autoboot/iSmart Premium/system/ismat.dat"
 
@@ -165,10 +169,15 @@ autoboot:
 
 	#### M3 DS Real, iTouchDS, R4(i) SDHC (r4rts.com)
 	cp booter_fc.nds r4i.sys
-	dlditool "flashcart_specifics/DLDI/m3r4_m3ds.dldi" r4i.sys
+	dlditool "flashcart_specifics/DLDI/m3ds.dldi" r4i.sys
 	mkdir -p "../7zfile/Flashcard users/Autoboot/M3 DS Real, M3i Zero (non-GMP-Z003), iTouchDS, R4(i) SDHC (r4rts.com)/_system_/_sys_data"
 	cp r4i.sys "../7zfile/Flashcard users/Autoboot/M3 DS Real, M3i Zero (non-GMP-Z003), iTouchDS, R4(i) SDHC (r4rts.com)/_system_/_sys_data/r4i.sys"
 	mv r4i.sys "../7zfile/Flashcard users/Autoboot/M3 DS Real, M3i Zero (non-GMP-Z003), iTouchDS, R4(i) SDHC (r4rts.com)/SRESET.dat"
+
+	#### SuperCard DSONE SDHC / DSONEi
+	cp booter_fc.nds TTMenu.dat
+	dlditool flashcart_specifics/DLDI/scdssdhc2.dldi TTMenu.dat
+	mv TTMenu.dat "../7zfile/Flashcard users/Autoboot/SuperCard DSONE SDHC & SuperCard DSONEi/TTMenu.dat"
 
 	#### SuperCard DSTWO
 	cp booter_fc.nds dstwo.nds
@@ -193,7 +202,7 @@ autoboot:
 
 	#### DSTT and its (many) clones
 	cp booter_acekard2.nds TTMenu.dat
-	dlditool flashcart_specifics/DLDI/DSTTDLDIboyakkeyver.dldi TTMenu.dat
+	dlditool flashcart_specifics/DLDI/ttio_sdhc.dldi TTMenu.dat
 
 	mkdir -p "../7zfile/Flashcard users/Autoboot/DSTT, DSTTi, DSTTi Gold, DSTT-Advance, R4Top Revolution, & R4i-SDHC v1.41 + v1.42/"
 	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/DSTT, DSTTi, DSTTi Gold, DSTT-Advance, R4Top Revolution, & R4i-SDHC v1.41 + v1.42/TTMenu.dat"
@@ -202,9 +211,9 @@ autoboot:
 	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/Ace3DS/3DSCARD.dat"
 	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/Ace3DS/TTMenu.dat"
 
-	mkdir -p "../7zfile/Flashcard users/Autoboot/Blue R4i Revolution v1.4.1, R4i Gold Upgrade Revolution v1.4.1, GoldR4 3DS (v4.301 kernel) & R4i SDHC Upgrade Revolution (www.r4i-sdhc.com.tw)/"
-	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/Blue R4i Revolution v1.4.1, R4i Gold Upgrade Revolution v1.4.1, GoldR4 3DS (v4.301 kernel) & R4i SDHC Upgrade Revolution (www.r4i-sdhc.com.tw)/iLL.iL"
-	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/Blue R4i Revolution v1.4.1, R4i Gold Upgrade Revolution v1.4.1, GoldR4 3DS (v4.301 kernel) & R4i SDHC Upgrade Revolution (www.r4i-sdhc.com.tw)/TTMenu.dat"
+	mkdir -p "../7zfile/Flashcard users/Autoboot/Blue R4i Revolution v1.4.1, R4i Gold Upgrade Revolution v1.4.1, R4i 3D (www.r4i-gold.hk), GoldR4 3DS (v4.301 kernel) & R4i SDHC Upgrade Revolution (www.r4i-sdhc.com.tw)/"
+	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/Blue R4i Revolution v1.4.1, R4i Gold Upgrade Revolution v1.4.1, R4i 3D (www.r4i-gold.hk), GoldR4 3DS (v4.301 kernel) & R4i SDHC Upgrade Revolution (www.r4i-sdhc.com.tw)/iLL.iL"
+	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/Blue R4i Revolution v1.4.1, R4i Gold Upgrade Revolution v1.4.1, R4i 3D (www.r4i-gold.hk), GoldR4 3DS (v4.301 kernel) & R4i SDHC Upgrade Revolution (www.r4i-sdhc.com.tw)/TTMenu.dat"
 
 	mkdir -p "../7zfile/Flashcard users/Autoboot/R4i Gold Upgrade Revolution (v1.14b kernel)/"
 	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/R4i Gold Upgrade Revolution (v1.14b kernel)/R4i.dat"
@@ -246,13 +255,8 @@ autoboot:
 
 	mkdir -p "../7zfile/Flashcard users/Autoboot/R4i-REDANT/"
 	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/R4i-REDANT/Redant.dat"
-	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/R4i-REDANT/TTMenu.dat"
-
-	cp TTMenu.dat "../7zfile/Flashcard users/Autoboot/SuperCard DSONE SDHC & SuperCard DSONEi/SDHC/TTMenu.dat"
-	# DSONE SDHC using a non-SDHC SD uses its own DLDI, but boots from TTMenu.dat
-	dlditool flashcart_specifics/DLDI/DSONESlot-1.dldi TTMenu.dat
 	# Since this is the last one, move it instead of copy
-	mv TTMenu.dat "../7zfile/Flashcard users/Autoboot/SuperCard DSONE SDHC & SuperCard DSONEi/Non-SDHC/TTMenu.dat"
+	mv TTMenu.dat "../7zfile/Flashcard users/Autoboot/R4i-REDANT/TTMenu.dat"
 
 
 $(TARGET).nds:	makearm7_fc makearm7_r4ils makearm9_fc makearm9_r4ig makearm9_acekard2 makearm9_r4idsn
@@ -274,7 +278,7 @@ clean:
 	@rm -fr $(TARGET)_acekard2.nds $(TARGET)_acekard2.arm9.elf
 	@rm -fr $(TARGET)_r4ils.nds $(TARGET)_r4ils.arm7.elf
 	@$(MAKE) -C bootloader clean
-	@$(MAKE) -C bootstub clean
+	@$(MAKE) -C $(PROJECT)/universal/bootstub clean
 	@$(MAKE) -C arm9 clean
 	@$(MAKE) -C flashcart_specifics/r4ig/arm9 clean
 	@$(MAKE) -C flashcart_specifics/r4ils/arm7 clean
@@ -289,4 +293,4 @@ bootloader: data
 	@$(MAKE) -C bootloader
 
 bootstub: data
-	@$(MAKE) -C bootstub
+	@$(MAKE) -C $(PROJECT)/universal/bootstub BOOTSTUB=$(CURDIR)/data/bootstub.bin

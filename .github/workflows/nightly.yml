@@ -23,16 +23,27 @@ jobs:
       author_name: ${{ steps.make-cias.outputs.author_name }}
       committer_name: ${{ steps.make-cias.outputs.committer_name }}
       commit_subject: ${{ steps.make-cias.outputs.commit_subject }}
-      commit_message: ${{ steps.make-cias.outputs.commit_message }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
           submodules: recursive
+          fetch-depth: 0
       - name: Install tools
         run: |
           sudo apt-get update
           sudo apt-get install p7zip-full python -y
+      - name: Setup environment
+        run: |
+          git config --global safe.directory '*'
+
+          echo "commit_tag=$(git describe --abbrev=0 --tags)" >> $GITHUB_OUTPUT
+          echo "commit_hash=$(git log --format=%h -1)" >> $GITHUB_OUTPUT
+
+          # Webhook info
+          echo "author_name=$(git log -1 $GITHUB_SHA --pretty=%aN)" >> $GITHUB_OUTPUT
+          echo "committer_name=$(git log -1 $GITHUB_SHA --pretty=%cN)" >> $GITHUB_OUTPUT
+          echo "commit_subject=$(git log -1 $GITHUB_SHA --pretty=%s)" >> $GITHUB_OUTPUT
       - name: Get manual pages
         run: |
           cd manual/nitrofiles
@@ -47,19 +58,8 @@ jobs:
           cd booter/
           chmod +x make_cia
           ./make_cia --srl="booter.nds" --id_0=$(git rev-parse --short=7 HEAD) --tikID=$(git rev-parse --short=16 HEAD)
-          ./make_cia --srl="booter_rungame.nds" --id_0=$(git rev-parse --short=7 HEAD) --tikID=$(git rev-parse --short=16 HEAD)
           mkdir -p "../7zfile/3DS - CFW users/"
           cp "booter.cia" "../7zfile/3DS - CFW users/TWiLight Menu.cia"
-          cp "booter_rungame.cia" "../7zfile/3DS - CFW users/TWiLight Menu - Game booter.cia"
-
-          echo ::set-output name=commit_tag::$(git describe --abbrev=0 --tags)
-          echo ::set-output name=commit_hash::$(git log --format=%h -1)
-
-          # Webhook info
-          echo "::set-output name=author_name::$(git log -1 $GITHUB_SHA --pretty=%aN)"
-          echo "::set-output name=committer_name::$(git log -1 $GITHUB_SHA --pretty=%cN)"
-          echo "::set-output name=commit_subject::$(git log -1 $GITHUB_SHA --pretty=%s)"
-          echo "::set-output name=commit_message::$(git log -1 $GITHUB_SHA --pretty=%b)"
       - name: Pack 7z Package for nightly
         run: |
           # Make artifacts directory
@@ -156,7 +156,7 @@ jobs:
         id: commit
         run: |
           CURRENT_DATE=$(date +"%Y%m%d-%H%M%S")
-          echo ::set-output name=current_date::$CURRENT_DATE
+          echo "current_date=$CURRENT_DATE" >> $GITHUB_OUTPUT
 
           git config --global user.email "flamekat54@aol.com"
           git config --global user.name "TWLBot"
@@ -174,7 +174,7 @@ jobs:
           AUTH_HEADER="Authorization: token ${{ secrets.TWLBOT_TOKEN }}"
           CONTENT_TYPE="Content-Type: application/json"
           API_URL="https://api.github.com/repos/TWLBot/Builds/releases"
-          RELEASE_INFO="{\"tag_name\": \"v${{ steps.commit.outputs.current_date }}\", \"name\": \"TWiLightMenu | $COMMIT_HASH\", \"body\": \"$AUTHOR_NAME - $COMMIT_SUBJECT\\n\\n$COMMIT_MESSAGE\", \"prerelease\": true}"
+          RELEASE_INFO="{\"tag_name\": \"v${{ steps.commit.outputs.current_date }}\", \"name\": \"TWiLightMenu | $COMMIT_HASH\", \"body\": \"$AUTHOR_NAME - $COMMIT_SUBJECT\", \"prerelease\": true}"
 
           RESPONSE=$(curl -XPOST -H "$AUTH_HEADER" -H "$CONTENT_TYPE" "$API_URL" -d "$RELEASE_INFO")
 

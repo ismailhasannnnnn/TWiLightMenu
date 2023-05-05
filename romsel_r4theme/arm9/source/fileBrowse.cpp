@@ -189,7 +189,7 @@ void getDirectoryContents(std::vector<DirEntry> &dirContents, const std::vector<
 			}
 
 			dirent *pent = readdir(pdir);
-			if (pent == nullptr || file_count > 320)
+			if (pent == nullptr || file_count > ((dsiFeatures() || sys().dsDebugRam()) ? 1024 : 512))
 				break;
 
 			// Now that we've got the attrs and the name, skip if we should be hiding this
@@ -450,6 +450,9 @@ bool donorRomMsg(void) {
 				switch (requiresDonorRom) {
 					default:
 						break;
+					case 20:
+						printSmallCentered(false, 90, "Find the SDK2.0 title,");
+						break;
 					case 51:
 						printSmallCentered(false, 90, "Find the DSi-Enhanced title,");
 						break;
@@ -469,6 +472,11 @@ bool donorRomMsg(void) {
 			} else {
 				switch (requiresDonorRom) {
 					default:
+						break;
+					case 20:
+						printSmallCentered(false, 90, "Please set a different SDK2.0");
+						printSmallCentered(false, 102, "title as a donor ROM, in order");
+						printSmallCentered(false, 114, "to launch this title.");
 						break;
 					case 51:
 						printSmallCentered(false, 90, "Please set a DSi-Enhanced title");
@@ -723,26 +731,35 @@ bool dsiWareRAMLimitMsg(char gameTid[5], std::string filename) {
 	bool mepFound = false;
 	int msgId = 0;
 
-	if (sys().isRegularDS()) {
-		// Find DSiWare title which requires Slot-2 RAM expansion larger than the Memory Expansion Pak
-		// TODO: If the list gets large enough, switch to bsearch().
-		for (unsigned int i = 0; i < sizeof(compatibleGameListB4DSLargeS2RAM)/sizeof(compatibleGameListB4DSLargeS2RAM[0]); i++) {
-			if (memcmp(gameTid, compatibleGameListB4DSLargeS2RAM[i], 3) == 0) {
-				// Found match
+	bool b4dsDebugConsole = ((sys().isRegularDS() && sys().dsDebugRam()) || (dsiFeatures() && bs().b4dsMode == 2));
+
+	// Find DSiWare title which requires Slot-2 RAM expansion such as the Memory Expansion Pak
+	// TODO: If the list gets large enough, switch to bsearch().
+	for (unsigned int i = 0; i < sizeof(compatibleGameListB4DSMEP)/sizeof(compatibleGameListB4DSMEP[0]); i++) {
+		if (memcmp(gameTid, compatibleGameListB4DSMEP[i], 3) == 0) {
+			// Found match
+			if (compatibleGameListB4DSMEPID[i] == 0 && b4dsDebugConsole) {
+				// Do nothing
+			} else if (sys().isRegularDS()) {
+				/*if (*(u16*)0x020000C0 == 0x5A45) {
+					showMsg = true;
+				} else*/
 				if (io_dldi_data->ioInterface.features & FEATURE_SLOT_NDS) {
 					u16 hwordBak = *(vu16*)(0x08240000);
 					*(vu16*)(0x08240000) = 1; // Detect Memory Expansion Pak
 					mepFound = (*(vu16*)(0x08240000) == 1);
 					*(vu16*)(0x08240000) = hwordBak;
-					showMsg = (!mepFound || *(u16*)0x020000C0 == 0); // Show message if not found
+					showMsg = (!mepFound || (compatibleGameListB4DSMEPID[i] == 2 && *(u16*)0x020000C0 == 0)); // Show message if not found
 				}
-				msgId = 11;
-				break;
+			} else {
+				showMsg = true;
 			}
+			msgId = (compatibleGameListB4DSMEPID[i] == 2) ? 11 : 10;
+			break;
 		}
 	}
-	if (!showMsg && msgId != 11) {
-		if (sys().dsDebugRam() || (dsiFeatures() && bs().b4dsMode == 2)) {
+	if (!showMsg) {
+		if (b4dsDebugConsole) {
 			// TODO: If the list gets large enough, switch to bsearch().
 			for (unsigned int i = 0; i < sizeof(compatibleGameListB4DSDebugRAMLimited)/sizeof(compatibleGameListB4DSDebugRAMLimited[0]); i++) {
 				if (memcmp(gameTid, compatibleGameListB4DSDebugRAMLimited[i], 3) == 0) {
@@ -753,37 +770,13 @@ bool dsiWareRAMLimitMsg(char gameTid[5], std::string filename) {
 				}
 			}
 		} else {
-			// Find DSiWare title which requires the Memory Expansion Pak
 			// TODO: If the list gets large enough, switch to bsearch().
-			for (unsigned int i = 0; i < sizeof(compatibleGameListB4DSMEP)/sizeof(compatibleGameListB4DSMEP[0]); i++) {
-				if (memcmp(gameTid, compatibleGameListB4DSMEP[i], 3) == 0) {
+			for (unsigned int i = 0; i < sizeof(compatibleGameListB4DSRAMLimited)/sizeof(compatibleGameListB4DSRAMLimited[0]); i++) {
+				if (memcmp(gameTid, compatibleGameListB4DSRAMLimited[i], 3) == 0) {
 					// Found match
-					if (sys().isRegularDS()) {
-						if (*(u16*)0x020000C0 == 0x5A45) {
-							showMsg = true;
-						} else if (io_dldi_data->ioInterface.features & FEATURE_SLOT_NDS) {
-							u16 hwordBak = *(vu16*)(0x08240000);
-							*(vu16*)(0x08240000) = 1; // Detect Memory Expansion Pak
-							mepFound = (*(vu16*)(0x08240000) == 1);
-							*(vu16*)(0x08240000) = hwordBak;
-							showMsg = !mepFound; // Show message if not found
-						}
-					} else {
-						showMsg = true;
-					}
-					msgId = 10;
+					showMsg = true;
+					msgId = compatibleGameListB4DSRAMLimitedID[i];
 					break;
-				}
-			}
-			if (!showMsg) {
-				// TODO: If the list gets large enough, switch to bsearch().
-				for (unsigned int i = 0; i < sizeof(compatibleGameListB4DSRAMLimited)/sizeof(compatibleGameListB4DSRAMLimited[0]); i++) {
-					if (memcmp(gameTid, compatibleGameListB4DSRAMLimited[i], 3) == 0) {
-						// Found match
-						showMsg = true;
-						msgId = compatibleGameListB4DSRAMLimitedID[i];
-						break;
-					}
 				}
 			}
 		}
@@ -806,7 +799,7 @@ bool dsiWareRAMLimitMsg(char gameTid[5], std::string filename) {
 
 	bool proceedToLaunch = true;
 
-	if (msgId == 10 && !sys().isRegularDS()) {
+	if (msgId >= 10 && !sys().isRegularDS()) {
 		cannotLaunchMsg();
 		return false;
 	}
@@ -837,6 +830,19 @@ bool dsiWareRAMLimitMsg(char gameTid[5], std::string filename) {
 			printSmallCentered(false, 90, "Due to memory limitations, the game");
 			printSmallCentered(false, 102, msgId == 4 ? "will crash at certain point(s). To work" : "will crash at a specific area. To work");
 			printSmallCentered(false, 114, "around the crash, launch this on");
+			printSmallCentered(false, 126, "Nintendo DSi or 3DS systems.");
+			break;
+		case 5:
+			printSmallCentered(false, 90, "Due to memory limitations, FMVs");
+			printSmallCentered(false, 102, "will not be played. For playback");
+			printSmallCentered(false, 114, "of FMVs, launch this on");
+			printSmallCentered(false, 126, "Nintendo DSi or 3DS systems.");
+			break;
+		case 6:
+		case 7:
+			printSmallCentered(false, 90, msgId == 7 ? "Due to no save support, the game" : "Due to memory limitations, the game");
+			printSmallCentered(false, 102, "will run in a limited state. To play");
+			printSmallCentered(false, 114, "the full version, launch this on");
 			printSmallCentered(false, 126, "Nintendo DSi or 3DS systems.");
 			break;
 		case 10:
@@ -919,25 +925,12 @@ bool dsiWareCompatibleB4DS(const char* filename) {
 	grabTID(f_nds_file, game_TID);
 	fclose(f_nds_file);
 
-	if (sys().isRegularDS()) {
-		// Find DSiWare title which requires Slot-2 RAM expansion larger than the Memory Expansion Pak
-		// TODO: If the list gets large enough, switch to bsearch().
-		for (unsigned int i = 0; i < sizeof(compatibleGameListB4DSLargeS2RAM)/sizeof(compatibleGameListB4DSLargeS2RAM[0]); i++) {
-			if (memcmp(game_TID, compatibleGameListB4DSLargeS2RAM[i], (compatibleGameListB4DSLargeS2RAM[i][3] != 0 ? 4 : 3)) == 0) {
-				// Found match
-				res = true;
-				break;
-			}
-		}
-	}
-	if (!res) {
-		// TODO: If the list gets large enough, switch to bsearch().
-		for (unsigned int i = 0; i < sizeof(compatibleGameListB4DS)/sizeof(compatibleGameListB4DS[0]); i++) {
-			if (memcmp(game_TID, compatibleGameListB4DS[i], (compatibleGameListB4DS[i][3] != 0 ? 4 : 3)) == 0) {
-				// Found match
-				res = true;
-				break;
-			}
+	// TODO: If the list gets large enough, switch to bsearch().
+	for (unsigned int i = 0; i < sizeof(compatibleGameListB4DS)/sizeof(compatibleGameListB4DS[0]); i++) {
+		if (memcmp(game_TID, compatibleGameListB4DS[i], (compatibleGameListB4DS[i][3] != 0 ? 4 : 3)) == 0) {
+			// Found match
+			res = true;
+			break;
 		}
 	}
 	if (!res && (sys().dsDebugRam() || bs().b4dsMode == 2)) {
@@ -958,9 +951,9 @@ std::string browseForFile(const std::vector<std::string_view> extensionList) {
 		lcdSwapped = false;
 	}
 
-	gameOrderIniPath = std::string(isRunFromSd() ? "sd" : "fat") + ":/_nds/TWiLightMenu/extras/gameorder.ini";
-	recentlyPlayedIniPath = std::string(isRunFromSd() ? "sd" : "fat") + ":/_nds/TWiLightMenu/extras/recentlyplayed.ini";
-	timesPlayedIniPath = std::string(isRunFromSd() ? "sd" : "fat") + ":/_nds/TWiLightMenu/extras/timesplayed.ini";
+	gameOrderIniPath = std::string(sys().isRunFromSD() ? "sd" : "fat") + ":/_nds/TWiLightMenu/extras/gameorder.ini";
+	recentlyPlayedIniPath = std::string(sys().isRunFromSD() ? "sd" : "fat") + ":/_nds/TWiLightMenu/extras/recentlyplayed.ini";
+	timesPlayedIniPath = std::string(sys().isRunFromSD() ? "sd" : "fat") + ":/_nds/TWiLightMenu/extras/timesplayed.ini";
 
 	int pressed = 0;
 	int screenOffset = 0;
@@ -1175,14 +1168,17 @@ std::string browseForFile(const std::vector<std::string_view> extensionList) {
 							if (requiresDonorRom == 152) {
 								pathDefine = "DONORTWLONLY0_NDS_PATH"; // SDK5.0
 							}
+						} else if (requiresDonorRom == 20) {
+							pathDefine = "DONOR20_NDS_PATH"; // SDK2.0
 						}
 						std::string donorRomPath;
-						const char *bootstrapinipath = isRunFromSd() ? BOOTSTRAP_INI : BOOTSTRAP_INI_FC;
+						const char *bootstrapinipath = sys().isRunFromSD() ? BOOTSTRAP_INI : BOOTSTRAP_INI_FC;
 						int dsiModeSetting = (perGameSettings_dsiMode == -1 ? DEFAULT_DSI_MODE : perGameSettings_dsiMode);
 						CIniFile bootstrapini(bootstrapinipath);
 						donorRomPath = bootstrapini.GetString("NDS-BOOTSTRAP", pathDefine, "");
-						bool donorRomFound = (strncmp(donorRomPath.c_str(), "nand:", 5) == 0 || (donorRomPath != "" && access(donorRomPath.c_str(), F_OK) == 0));
-						if (!donorRomFound && requiresDonorRom < 100) {
+						bool donorRomFound = (((!dsiFeatures() || bs().b4dsMode) && requiresDonorRom != 20 && ms().secondaryDevice && access("fat:/_nds/nds-bootstrap/b4dsTwlDonor.bin", F_OK) == 0)
+											|| strncmp(donorRomPath.c_str(), "nand:", 5) == 0 || (donorRomPath != "" && access(donorRomPath.c_str(), F_OK) == 0));
+						if (!donorRomFound && requiresDonorRom != 20 && requiresDonorRom < 100) {
 							pathDefine = "DONORTWL0_NDS_PATH"; // SDK5.0
 							if (requiresDonorRom == 52) {
 								pathDefine = "DONORTWLONLY0_NDS_PATH"; // SDK5.0
@@ -1191,7 +1187,7 @@ std::string browseForFile(const std::vector<std::string_view> extensionList) {
 							donorRomFound = (strncmp(donorRomPath.c_str(), "nand:", 5) == 0 || (donorRomPath != "" && access(donorRomPath.c_str(), F_OK) == 0));
 						}
 						if (!donorRomFound
-						&& (requiresDonorRom == 51 || requiresDonorRom == 151
+						&& (requiresDonorRom == 20 || requiresDonorRom == 51 || requiresDonorRom == 151
 						|| (requiresDonorRom == 52 && (isDSiWare || dsiModeSetting > 0)) || requiresDonorRom == 152)
 						) {
 							proceedToLaunch = donorRomMsg();
@@ -1364,7 +1360,7 @@ std::string browseForFile(const std::vector<std::string_view> extensionList) {
 						printSmallCentered(false, 0, 98, "If this crashes with an error, please");
 						printSmallCentered(false, 0, 110, "disable \"Update recently played list\".");
 
-						mkdir(isRunFromSd() ? "sd:/_nds/TWiLightMenu/extras" : "fat:/_nds/TWiLightMenu/extras", 0777);
+						mkdir(sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/extras" : "fat:/_nds/TWiLightMenu/extras", 0777);
 
 						CIniFile recentlyPlayedIni(recentlyPlayedIniPath);
 						std::vector<std::string> recentlyPlayed;
