@@ -1694,27 +1694,17 @@ int dsiMenuTheme(void) {
 					|| (unitCode[CURPOS] == 3 && !ms().homebrewBootstrap)) {
 						std::string path = argarray[0];
 						std::string savename = replaceAll(filename, typeToReplace, getSavExtension());
-                        std::string saveNameFc = replaceAll(filename, typeToReplace, ".sav");
+						std::string saveNameFc = replaceAll(filename, typeToReplace, ".sav");
 						std::string ramdiskname = replaceAll(filename, typeToReplace, getImgExtension(perGameSettings_ramDiskNo));
 						std::string romFolderNoSlash = ms().romfolder[ms().secondaryDevice];
 						RemoveTrailingSlashes(romFolderNoSlash);
-						mkdir(isHomebrew[CURPOS] ? "ramdisks" : ("/saves/"+savename).c_str(), 0777);
-                        std::string savepath = "sd:/saves/" + savename + "/" + saveNameFc;
-						if (sdFound() && ms().secondaryDevice && ms().fcSaveOnSd) {
-							savepath = replaceAll(savepath, "fat:/", "sd:/");
-						}
+						
+						// Custom behavior: saves in /saves/romname/ directory
+						std::string saveDirPath = "/saves/" + savename;
+						mkdir(isHomebrew[CURPOS] ? "ramdisks" : saveDirPath.c_str(), 0777);
+						
+						std::string savepath = "sd:/saves/" + savename + "/" + saveNameFc;
 						std::string ramdiskpath = romFolderNoSlash + "/ramdisks/" + ramdiskname;
-						if (isHomebrew[CURPOS]) {
-							mkdir("ramdisks", 0777);
-						} else if (ms().saveLocation == TWLSettings::ETWLMFolder) {
-							std::string twlmSavesFolder = sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/saves" : "fat:/_nds/TWiLightMenu/saves";
-							mkdir(twlmSavesFolder.c_str(), 0777);
-							savepath = twlmSavesFolder + "/" + savename;
-						} else if (ms().saveLocation == TWLSettings::EGamesFolder) {
-							savepath = romFolderNoSlash + "/" + savename;
-						} else {
-							mkdir("saves", 0777);
-						}
 
 						createSaveFile(savepath.c_str(), isHomebrew[CURPOS], gameTid[CURPOS]);
 
