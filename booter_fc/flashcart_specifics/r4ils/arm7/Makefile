@@ -21,21 +21,22 @@ UNIVERSAL	:=	../../../../universal
 TARGET		:=	booter
 BUILD		:=	build
 SOURCES		:=	../../../arm7/source $(UNIVERSAL)/sdmmc/arm7/source
-INCLUDES	:=	../../../arm7/include build $(UNIVERSAL)/sdmmc/arm7/include
+INCLUDES	:=	../../../arm7/include build $(UNIVERSAL)/arm7/include $(UNIVERSAL)/sdmmc/arm7/include
 
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv4t -mthumb -mthumb-interwork
 
-CFLAGS	:=	-g -Wall -O2\
+CFLAGS	:=	-g -Wall -O2 \
  		-mcpu=arm7tdmi -mtune=arm7tdmi -fomit-frame-pointer\
 		-ffast-math \
+		-flto \
 		$(ARCH)
 
 CFLAGS	+=	$(INCLUDE) -DARM7 -DNO_SDMMC
 
-ASFLAGS	:=	-g $(ARCH)
+ASFLAGS	:=	-g $(ARCH) -flto
 LDFLAGS	=	-specs=ds_arm7.specs -g $(ARCH) -Wl,--nmagic -Wl,-Map,$(notdir $*).map
 
 

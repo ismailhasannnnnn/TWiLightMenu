@@ -8,10 +8,12 @@
 *.arm7
 *.arm9
 *.DS_Store
-*soundbank*.bin
 thumbs.db
+*:Zone.Identifier
 !GBARunner2_arm9dldi_ds.nds
 !GBARunner2_arm7dldi_ds.nds
+!GBARunner2_arm9dldi_rom3m_ds.nds
+!GBARunner2_arm7dldi_rom3m_ds.nds
 !GBARunner2_arm7dldi_dsi.nds
 !GBARunner2_arm7dldi_3ds.nds
 !GBARunner2_arm7dldi_nodsp_dsi.nds
@@ -20,6 +22,8 @@ thumbs.db
 !/7zfile/Flashcard users/Autoboot/*/*.NDS
 !/7zfile/Flashcard users/Autoboot/*/*/*.NDS
 !/7zfile/Flashcard users/Flashcart Loader/*/*/*.NDS
+!/7zfile/Multimedia/_nds/TWiLightMenu/*/*.NDS
+!/7zfile/Virtual Console/_nds/TWiLightMenu/*/*.NDS
 manual/nitrofiles/pages
 settings/arm9/include/version.h
 
@@ -33,11 +37,14 @@ data/
 ipch/
 
 7zfile/Flashcard users/Autoboot/Ace3DS
-7zfile/Flashcard users/Autoboot/Ace3DS+, Ace3DS X, R4iLS, r4isdhc.com.cn cards, r4isdhc.hk 2021, R4infinity 2, R4i-XDS 2014 white version
+7zfile/Flashcard users/Autoboot/Ace3DS+
 7zfile/Flashcard users/Autoboot/Acekard 2i & Acekard 2.1
-7zfile/Flashcard users/Autoboot/Blue R4i Revolution v1.4.1, R4i Gold Upgrade Revolution v1.4.1, R4i 3D (www.r4i-gold.hk), GoldR4 3DS (v4.301 kernel) & R4i SDHC Upgrade Revolution (www.r4i-sdhc.com.tw)
-7zfile/Flashcard users/Autoboot/DSTT, DSTTi, DSTTi Gold, DSTT-Advance, R4Top Revolution, & R4i-SDHC v1.41 + v1.42
+7zfile/Flashcard users/Autoboot/Blue R4i Revolution
+7zfile/Flashcard users/Autoboot/DSTT
+7zfile/Flashcard users/Autoboot/EDGEi
+7zfile/Flashcard users/Autoboot/EZ Flash Parallel
 7zfile/Flashcard users/Autoboot/EZ Flash V
+7zfile/Flashcard users/Autoboot/EZ Flash Vi
 7zfile/Flashcard users/Autoboot/Galaxy Eagle/_MENU_.NDS
 7zfile/Flashcard users/Autoboot/Galaxy Eagle/_MENU_B.NDS
 7zfile/Flashcard users/Autoboot/Games N Music
@@ -46,19 +53,26 @@ ipch/
 7zfile/Flashcard users/Autoboot/iSmart Premium
 7zfile/Flashcard users/Autoboot/M3 DS Real, M3i Zero (non-GMP-Z003), iTouchDS, R4(i) SDHC (r4rts.com)/SRESET.dat
 7zfile/Flashcard users/Autoboot/M3 DS Real, M3i Zero (non-GMP-Z003), iTouchDS, R4(i) SDHC (r4rts.com)/_system_
-7zfile/Flashcard users/Autoboot/N5/_DS_MENU.dat
+7zfile/Flashcard users/Autoboot/N5 & R4-PLUS/_DS_MENU.dat
+7zfile/Flashcard users/Autoboot/N-Card
 7zfile/Flashcard users/Autoboot/Original R4 & M3 Simply
+7zfile/Flashcard users/Autoboot/Original R4SDHC
 7zfile/Flashcard users/Autoboot/R4 Deluxe v1.20
-7zfile/Flashcard users/Autoboot/R4 Ultra, r4ids.cn cards, R4iTT 3DS, R4i3D 2012+, r4isdhc.com NEW, r4isdhc.com 2013, r4isdhc.hk -2019, r4igold.cc 3DS translucent, r4i-gold.me 2013+
+7zfile/Flashcard users/Autoboot/R4 Ultra
 7zfile/Flashcard users/Autoboot/R4i DSi XL & R4V-R4i v2.2 + v2.5
 7zfile/Flashcard users/Autoboot/R4i Gold Upgrade Revolution (v1.14b kernel)
 7zfile/Flashcard users/Autoboot/R4i King LL
-7zfile/Flashcard users/Autoboot/R4i SDHC Upgrade Revolution (www.r4i-dshc.com), R4i 3DS (v4.3 kernel) & R4i YES
+7zfile/Flashcard users/Autoboot/R4i Advance
 7zfile/Flashcard users/Autoboot/R4i Upgrade Revolution
 7zfile/Flashcard users/Autoboot/R4i-REDANT
-7zfile/Flashcard users/Autoboot/R4i-SDHC, r4isdhc.com cards 2014+, R4i SDHC Upgrade Revolution, R4DSiXL3D, R4i Advance, R4-IIIi, R4 SDHC Revolution, R4(i) Pocket, R4i Gold (v1.4.1) (3DS) & R4xDS
+7zfile/Flashcard users/Autoboot/R4i-SDHC
+!7zfile/Flashcard users/Autoboot/R4i SDHC Brand New V2.0/_DS_MENU.DAT
+7zfile/Flashcard users/Autoboot/R4i SDHC Brand New V2.0/R4.dat
+7zfile/Flashcard users/Autoboot/R4i SDHC Brand New V2.0/TTMenu.dat
 7zfile/Flashcard users/Autoboot/R4iDSN
 7zfile/Flashcard users/Autoboot/R4IIISDHC (v3.07 kernel), R4i SDHC Silver RTS Lite, R4iTT v1.6
+7zfile/Flashcard users/Autoboot/r4i.cn
+7zfile/Flashcard users/Autoboot/R4DS Pro
 7zfile/Flashcard users/Autoboot/SuperCard DSONE
 7zfile/Flashcard users/Autoboot/SuperCard DSONE SDHC & SuperCard DSONEi/TTMenu.dat
 7zfile/Flashcard users/Autoboot/SuperCard DSTWO/_dstwo/dstwo.nds

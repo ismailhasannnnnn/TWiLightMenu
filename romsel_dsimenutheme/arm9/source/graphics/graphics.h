@@ -29,8 +29,11 @@ void SetBrightness(u8 screen, s8 bright);
 void drawCurrentDate();
 void drawCurrentTime();
 
+bool loadPhotoList();
+void reloadPhoto();
 void clearBoxArt();
 void graphicsInit();
+extern u16* colorTable;
 
 template<typename T> inline const T abs(T const & x)
 {

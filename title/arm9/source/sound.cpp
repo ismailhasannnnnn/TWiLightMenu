@@ -43,6 +43,18 @@ static inline const char* styleSavvyReleaseDate(void) {
 	return "10/23"; // Japan
 }
 
+static inline const char* sonic1ReleaseDate(void) {
+	using TRegion = TWLSettings::TRegion;
+	int gameRegion = ms().getGameRegion();
+
+	if (gameRegion == TRegion::ERegionEurope || gameRegion == TRegion::ERegionAustralia) {
+		return "06/21";
+	} else if (gameRegion == TRegion::ERegionUSA) {
+		return "06/23";
+	}
+	return "07/26"; // Japan
+}
+
 
 // Reference: http://yannesposito.com/Scratch/en/blog/2010-10-14-Fun-with-wav/
 typedef struct _WavHeader {
@@ -110,9 +122,21 @@ SoundControl::SoundControl()
 	} else if (strcmp(currentDate, sm64dsReleaseDate()) == 0) {
 		// Load Mario 64 coin sound
 		sprintf(wavPath, "nitro:/sound/coin64.wav");
+	} else if (strcmp(currentDate, sonic1ReleaseDate()) == 0) {
+		// Load Sonic 1 extra life sound
+		sprintf(wavPath, "nitro:/sound/sonic.wav");
+	} else if (strcmp(currentDate, "02/27") == 0) {
+		// Load Pokémon Day sound
+		sprintf(wavPath, "nitro:/sound/pokemon.wav");
 	} else if (strcmp(currentDate, "03/10") == 0) {
 		// Load Mario coin sound for MAR10 Day
 		sprintf(wavPath, "nitro:/sound/coin.wav");
+	} else if (strcmp(currentDate, "04/27") == 0) {
+		// Load Kirby dance jingle for Kirby's anniversary
+		sprintf(wavPath, ms().longSplashJingle ? "nitro:/sound/kirbyLong.wav" : "nitro:/sound/kirby.wav");
+	} else if (strcmp(currentDate, ms().getGameRegion() == 0 ? "07/21" : "08/14") == 0) {
+		// Load Virtual Boy rendition of jingle for Virtual Boy release date
+		sprintf(wavPath, ms().longSplashJingle ? "nitro:/sound/virtualBoyLong.wav" : "nitro:/sound/virtualBoy.wav");
 	} else {
 		sprintf(wavPath, ms().longSplashJingle ? "nitro:/sound/titleLong.wav" : "nitro:/sound/title.wav");
 	}
@@ -124,10 +148,11 @@ SoundControl::SoundControl()
 
 	mmInitDefaultMem((mm_addr)soundBank);
 
-	mmLoadEffect( (sys().isRegularDS() || ms().macroMode) ? SFX_DSBOOT : SFX_DSIBOOT );
+	const bool regularDS = (sys().isRegularDS() && !ms().oppositeSplash) || (!sys().isRegularDS() && ms().oppositeSplash);
+	mmLoadEffect( (regularDS || ms().macroMode) ? SFX_DSBOOT : SFX_DSIBOOT );
 	mmLoadEffect( SFX_SELECT );
 
-	if (sys().isRegularDS() || ms().macroMode) {
+	if (regularDS || ms().macroMode) {
 		snd_dsiboot = {
 			{ SFX_DSBOOT } ,			// id
 			(int)(1.0f * (1<<10)),	// rate

@@ -2,7 +2,12 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <unistd.h>
+#include "common/twlmenusettings.h"
 #include "common/flashcard.h"
+#include "common/nitrofs.h"
+#include "common/systemdetails.h"
+#include "common/logging.h"
+#include "perGameSettings.h"
 #include <gl2d.h>
 
 #include "ndsheaderbanner.h"
@@ -16,18 +21,20 @@ u8 unitCode[40] = {0};
 u16 headerCRC[40] = {0};
 u32 a7mbk6[40] = {0};
 
-bool checkDsiBinaries(FILE* ndsFile) {
-	sNDSHeaderExt ndsHeader;
-
-	fseek(ndsFile, 0, SEEK_SET);
-	fread(&ndsHeader, 1, sizeof(ndsHeader), ndsFile);
-
-	if (ndsHeader.unitCode == 0) {
+bool checkDsiBinaries(const char* filename, const int num) {
+	if (unitCode[num] == 0) {
 		return true;
 	}
 
+	FILE *ndsFile = fopen(filename, "rb");
+
+	sNDSHeaderExt ndsHeader;
+
+	fread(&ndsHeader, 1, sizeof(ndsHeader), ndsFile);
+
 	if (ndsHeader.arm9iromOffset < 0x8000 || ndsHeader.arm9iromOffset >= 0x20000000
 	 || ndsHeader.arm7iromOffset < 0x8000 || ndsHeader.arm7iromOffset >= 0x20000000) {
+		fclose(ndsFile);
 		return false;
 	}
 
@@ -44,6 +51,7 @@ bool checkDsiBinaries(FILE* ndsFile) {
 	fread(arm9Sig[1], sizeof(u32), 4, ndsFile);
 	fseek(ndsFile, ndsHeader.arm7iromOffset, SEEK_SET);
 	fread(arm9Sig[2], sizeof(u32), 4, ndsFile);
+	fclose(ndsFile);
 	for (int i = 1; i < 3; i++) {
 		if (arm9Sig[i][0] == arm9Sig[0][0]
 		 && arm9Sig[i][1] == arm9Sig[0][1]
@@ -86,65 +94,98 @@ u32 getSDKVersion(FILE *ndsFile)
 
 /**
  * Check if NDS game has AP.
- * @param ndsFile NDS file.
  * @param filename NDS ROM filename.
- * @return 1 or 2 on success; 0 if no AP.
+ * @return true on success; false if no AP.
  */
-int checkRomAP(FILE *ndsFile, int num)
+bool checkRomAP(const char* filename, const int num)
 {
-	char ipsPath[256];
-	snprintf(ipsPath, sizeof(ipsPath), "%s:/_nds/TWiLightMenu/extras/apfix/%s-%X.ips", sdFound() ? "sd" : "fat", gameTid[num], headerCRC[num]);
+	{
+		char apFixPath[256];
+		sprintf(apFixPath, "%s:/_nds/nds-bootstrap/apFix/%s.ips", sys().isRunFromSD() ? "sd" : "fat", filename);
+		if (access(apFixPath, F_OK) == 0) {
+			logPrint("AP-fix found!\n");
+			return false;
+		}
 
-	if (access(ipsPath, F_OK) == 0) {
-		return 0;
+		sprintf(apFixPath, "%s:/_nds/nds-bootstrap/apFix/%s.bin", sys().isRunFromSD() ? "sd" : "fat", filename);
+		if (access(apFixPath, F_OK) == 0) {
+			logPrint("AP-fix found!\n");
+			return false;
+		}
+
+		sprintf(apFixPath, "%s:/_nds/nds-bootstrap/apFix/%s-%04X.ips", sys().isRunFromSD() ? "sd" : "fat", gameTid[num], headerCRC[num]);
+		if (access(apFixPath, F_OK) == 0) {
+			logPrint("AP-fix found!\n");
+			return false;
+		}
+
+		sprintf(apFixPath, "%s:/_nds/nds-bootstrap/apFix/%s-%04X.bin", sys().isRunFromSD() ? "sd" : "fat", gameTid[num], headerCRC[num]);
+		if (access(apFixPath, F_OK) == 0) {
+			logPrint("AP-fix found!\n");
+			return false;
+		}
 	}
 
-	FILE *file = fopen(sdFound() ? "sd:/_nds/TWiLightMenu/extras/apfix.pck" : "fat:/_nds/TWiLightMenu/extras/apfix.pck", "rb");
+	{
+		const bool useNightly = (perGameSettings_bootstrapFile == -1 ? ms().bootstrapFile : perGameSettings_bootstrapFile);
+		char bootstrapPath[256];
+		sprintf(bootstrapPath, "%s:/_nds/nds-bootstrap-%s.nds", sys().isRunFromSD() ? "sd" : "fat", useNightly ? "nightly" : "release");
+		if (access(bootstrapPath, F_OK) != 0) {
+			sprintf(bootstrapPath, "%s:/_nds/nds-bootstrap-%s.nds", sys().isRunFromSD() ? "fat" : "sd", useNightly ? "nightly" : "release");
+		}
+
+		bootFSInit(bootstrapPath);
+	}
+
+	FILE *file = fopen("boot:/apfix.pck", "rb");
 	if (file) {
 		char buf[5] = {0};
 		fread(buf, 1, 4, file);
 		if (strcmp(buf, ".PCK") == 0) { // Make sure correct file type
 			u32 fileCount;
 			fread(&fileCount, 1, sizeof(fileCount), file);
+			logPrint("Searching for AP-fix...\n");
 
 			// Try binary search for the game
 			int left = 0;
 			int right = fileCount;
+			bool tidFound = false;
 
 			while (left <= right) {
-				int mid = left + ((right - left) / 2);
-				fseek(file, 16 + mid * 16, SEEK_SET);
+				fseek(file, 16 + left * 16, SEEK_SET);
 				fread(buf, 1, 4, file);
 				int cmp = strcmp(buf, gameTid[num]);
 				if (cmp == 0) { // TID matches, check CRC
+					tidFound = true;
 					u16 crc;
 					fread(&crc, 1, sizeof(crc), file);
+					logPrint("TID match: %s, CRC: %04X\n", gameTid[num], crc);
 
-					if (crc == headerCRC[num]) { // CRC matches
+					if (crc == 0xFFFF || crc == headerCRC[num]) { // CRC matches
 						fclose(file);
-						return 0;
-					} else if (crc < headerCRC[num]) {
-						left = mid + 1;
+						logPrint("AP-fix found!\n");
+						return false;
 					} else {
-						right = mid - 1;
+						left++;
 					}
-				} else if (cmp < 0) {
-					left = mid + 1;
+				} else if (tidFound) {
+					break;
 				} else {
-					right = mid - 1;
+					left++;
 				}
 			}
 		}
 
 		fclose(file);
 	}
+	logPrint("AP-fix not found!\n");
 
 	// Check for SDK4-5 ROMs that don't have AP measures.
 	if ((memcmp(gameTid[num], "AZLJ", 4) == 0)   	// Girls Mode (JAP version of Style Savvy)
 	 || (memcmp(gameTid[num], "YEEJ", 4) == 0)   	// Inazuma Eleven (Japan)
 	 || (memcmp(gameTid[num], "CNSX", 4) == 0)   	// Naruto Shippuden: Naruto vs Sasuke (Europe)
 	 || (memcmp(gameTid[num], "BH2J", 4) == 0)) {	// Super Scribblenauts (Japan)
-		return 0;
+		return false;
 	} else
 	// Check for ROMs that have AP measures.
 	if ((memcmp(gameTid[num], "VETP", 4) == 0)   	// 1000 Cooking Recipes from Elle a Table (Europe)
@@ -200,7 +241,7 @@ int checkRomAP(FILE *ndsFile, int num)
 	 || (memcmp(gameTid[num], "BZ2J", 4) == 0)   	// Imasugu Tsukaeru Mamechishiki: Quiz Zatsugaku-ou DS (Japan)
 	 || (memcmp(gameTid[num], "BEZJ", 4) == 0)   	// Inazuma Eleven 3: Sekai e no Chousen!!: Bomber (Japan)
 	 || (memcmp(gameTid[num], "BE8J", 4) == 0)   	// Inazuma Eleven 3: Sekai e no Chousen!!: Spark (Japan)
-	 || (memcmp(gameTid[num], "BOEJ", 4) == 0)   	// Inazuma Eleven 3: Sekai e no Chousen!!: The Ogre (Japan)
+	// || (memcmp(gameTid[num], "BOEJ", 4) == 0)   	// Inazuma Eleven 3: Sekai e no Chousen!!: The Ogre (Japan) (Patched by nds-bootstrap)
 	 || (memcmp(gameTid[num], "BJKJ", 4) == 0)   	// Ippan Zaidan Houjin Nihon Kanji Shuujukudo Kentei Kikou Kounin: Kanjukuken DS (Japan)
 	 || (memcmp(gameTid[num], "BIMJ", 4) == 0)   	// Iron Master: The Legendary Blacksmith (Japan)
 	 || (memcmp(gameTid[num], "CDOK", 4) == 0)   	// Iron Master: Wanggugui Yusangwa Segaeui Yeolsoe (Korea)
@@ -320,7 +361,7 @@ int checkRomAP(FILE *ndsFile, int num)
 	 || (memcmp(gameTid[num], "V29J", 4) == 0)   	// RPG Tkool DS (Japan)
 	 || (memcmp(gameTid[num], "VEBJ", 4) == 0)   	// RPG Tsukuru DS+: Create The New World (Japan)
 	 || (memcmp(gameTid[num], "ARFK", 4) == 0)   	// Rune Factory: Sinmokjjangiyagi (Korea)
-	 || (memcmp(gameTid[num], "CSGJ", 4) == 0)   	// SaGa 2: Hihou Densetsu: Goddess of Destiny (Japan)
+	// || (memcmp(gameTid[num], "CSGJ", 4) == 0)   	// SaGa 2: Hihou Densetsu: Goddess of Destiny (Japan) (Patched by nds-bootstrap)
 	 || (memcmp(gameTid[num], "BZ3J", 4) == 0)   	// SaGa 3: Jikuu no Hasha: Shadow or Light (Japan)
 	 || (memcmp(gameTid[num], "CBEJ", 4) == 0)   	// Saibanin Suiri Game: Yuuzai x Muzai (Japan)
 	 || (memcmp(gameTid[num], "B59J", 4) == 0)   	// Sakusaku Jinkou Kokyuu Care Training DS (Japan)
@@ -381,7 +422,7 @@ int checkRomAP(FILE *ndsFile, int num)
 	 || (memcmp(gameTid[num], "BYMJ", 4) == 0)   	// Yumeiro Patissiere: My Sweets Cooking (Japan)
 	 || (memcmp(gameTid[num], "BZQJ", 4) == 0)   	// Zac to Ombra: Maboroshi no Yuuenchi (Japan)
 	 || (memcmp(gameTid[num], "BZBJ", 4) == 0)) {	// Zombie Daisuki (Japan)
-		return 1;
+		return true;
 	} else {
 		static const char ap_list[][4] = {
 			"YBN",	// 100 Classic Books
@@ -418,7 +459,7 @@ int checkRomAP(FILE *ndsFile, int num)
 			"BFX",	// Final Fantasy: The 4 Heroes of Light
 			"VDE",	// Fossil Fighters Champions
 			"BJC",	// GoldenEye 007
-			"BO5",	// Golden Sun: Dark Dawn
+			// "BO5",	// Golden Sun: Dark Dawn (Patched by nds-bootstrap)
 			"YGX",	// Grand Theft Auto: Chinatown Wars
 			"BGT",	// Ghost Trick: Phantom Detective
 			"B7H",	// Harry Potter and the Deathly Hallows: Part 1
@@ -438,7 +479,7 @@ int checkRomAP(FILE *ndsFile, int num)
 			"CLJ",	// Mario & Luigi: Bowser's Inside Story
 			"COL",	// Mario & Sonic at the Olympic Winter Games
 			"V2G",	// Mario vs. Donkey Kong: Mini-Land Mayhem!
-			"B6Z",	// Mega Man Zero Collection
+			// "B6Z",	// Mega Man Zero Collection (Patched by nds-bootstrap)
 			"BVN",	// Michael Jackson: The Experience
 			"CHN",	// Might & Magic: Clash of Heroes
 			"BNQ",	// Murder in Venice
@@ -453,8 +494,8 @@ int checkRomAP(FILE *ndsFile, int num)
 			"C24",	// Phantasy Star 0
 			"BZF",	// Phineas and Ferb: Across the 2nd Dimension
 			"VPF",	// Phineas and Ferb: Ride Again
-			"IPK",	// Pokemon HeartGold Version
-			"IPG",	// Pokemon SoulSilver Version
+			// "IPK",	// Pokemon HeartGold Version (Patched by nds-bootstrap)
+			// "IPG",	// Pokemon SoulSilver Version (Patched by nds-bootstrap)
 			"IRA",	// Pokemon Black Version
 			"IRB",	// Pokemon White Version
 			"IRE",	// Pokemon Black Version 2
@@ -466,17 +507,17 @@ int checkRomAP(FILE *ndsFile, int num)
 			"C3J",	// Professor Layton and the Unwound Future
 			"BKQ",	// Pucca: Power Up
 			"VRG",	// Rabbids Go Home: A Comedy Adventure
-			"BRJ",	// Radiant Hostoria
+			// "BRJ",	// Radiant Historia (Patched by nds-bootstrap)
 			"B3X",	// River City: Soccer Hooligans
 			"BRM",	// Rooms: The Main Building
 			"TDV",	// Shin Megami Tensei: Devil Survivor 2
 			"BMT",	// Shin Megami Tensei: Strange Journey
-			"VCD",	// Solatorobo: Red the Hunter
+			// "VCD",	// Solatorobo: Red the Hunter (Patched by nds-bootstrap)
 			"BXS",	// Sonic Colors
 			"VSN",	// Sonny with a Chance
 			"B2U",	// Sports Collection
 			"CLW",	// Star Wars: The Clone Wars: Jedi Alliance
-			"AZL",	// Style Savvy
+			// "AZL",	// Style Savvy (Patched by nds-bootstrap)
 			"BH2",	// Super Scribblenauts
 			"B6T",	// Tangled
 			"B4T",	// Tetris Party Deluxe
@@ -499,8 +540,7 @@ int checkRomAP(FILE *ndsFile, int num)
 		for (unsigned int i = 0; i < sizeof(ap_list)/sizeof(ap_list[0]); i++) {
 			if (memcmp(gameTid[num], ap_list[i], 3) == 0) {
 				// Found a match.
-				return 1;
-				break;
+				return true;
 			}
 		}
 
@@ -512,14 +552,12 @@ int checkRomAP(FILE *ndsFile, int num)
 		for (unsigned int i = 0; i < sizeof(ap_list2)/sizeof(ap_list2[0]); i++) {
 			if (memcmp(gameTid[num], ap_list2[i], 3) == 0) {
 				// Found a match.
-				return 2;
-				break;
+				return true;
 			}
 		}
-
 	}
-	
-	return 0;
+
+	return false;
 }
 
 sNDSBannerExt bnriconTile[41];
@@ -530,11 +568,16 @@ static u16 bnriconframeseq[41][64] = {0x0000};
 // bnriconframenum[]
 int bnriconPalLoaded[41] = {0};
 int bnriconPalLine[41] = {0};
+int bnriconPalLinePrev[41] = {0};
 int bnriconframenumY[41] = {0};
+int bnriconframenumYPrev[41] = {0};
 int bannerFlip[41] = {GL_FLIP_NONE};
+int bannerFlipPrev[41] = {GL_FLIP_NONE};
 
 // bnriconisDSi[]
+bool isValid[40] = {false};
 bool isTwlm[40] = {false};
+bool isUnlaunch[40] = {false};
 bool isDirectory[40] = {false};
 bool bnrSysSettings[41] = {false};
 int bnrRomType[41] = {0};
@@ -558,7 +601,6 @@ int currentbnriconframeseq[41] = {0};
 void grabBannerSequence(int iconnum)
 {
 	memcpy(bnriconframeseq[iconnum], bnriconTile[iconnum].dsi_seq, 64 * sizeof(u16));
-
 	currentbnriconframeseq[iconnum] = 0;
 }
 
@@ -575,7 +617,7 @@ void clearBannerSequence(int iconnum)
  * Play banner sequence.
  * @param binFile Banner file.
  */
-void playBannerSequence(int iconnum)
+bool playBannerSequence(int iconnum)
 {
 	if (bnriconframeseq[iconnum][currentbnriconframeseq[iconnum] + 1] == 0x0100) {
 		// Do nothing if icon isn't animated
@@ -599,6 +641,23 @@ void playBannerSequence(int iconnum)
 			bannerFlip[iconnum] = GL_FLIP_V;
 		}
 
+		bool updateIcon = false;
+
+		if (bnriconPalLinePrev[iconnum] != bnriconPalLine[iconnum]) {
+			bnriconPalLinePrev[iconnum] = bnriconPalLine[iconnum];
+			updateIcon = true;
+		}
+
+		if (bnriconframenumYPrev[iconnum] != bnriconframenumY[iconnum]) {
+			bnriconframenumYPrev[iconnum] = bnriconframenumY[iconnum];
+			updateIcon = true;
+		}
+
+		if (bannerFlipPrev[iconnum] != bannerFlip[iconnum]) {
+			bannerFlipPrev[iconnum] = bannerFlip[iconnum];
+			updateIcon = true;
+		}
+
 		bannerDelayNum[iconnum]++;
 		if (bannerDelayNum[iconnum] >= (setframeseq & 0x00FF)) {
 			bannerDelayNum[iconnum] = 0x0000;
@@ -607,5 +666,9 @@ void playBannerSequence(int iconnum)
 				currentbnriconframeseq[iconnum] = 0; // Reset sequence
 			}
 		}
+
+		return updateIcon;
 	}
+
+	return false;
 }

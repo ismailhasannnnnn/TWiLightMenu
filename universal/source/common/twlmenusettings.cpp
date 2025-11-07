@@ -16,11 +16,20 @@ TWLSettings::TWLSettings()
 	romfolder[0] = "sd:/";
 	romfolder[1] = "fat:/";
 
+	defaultRomfolder[0] = "null";
+	defaultRomfolder[1] = "null";
+
+	cursorAlwaysAtStart = false;
+
 	pagenum[0] = 0;
 	pagenum[1] = 0;
 
 	cursorPosition[0] = 0;
 	cursorPosition[1] = 0;
+
+	// -1 means it won't overwrite cursorPosition / pagenum for saving
+	saveCursorPosition[0] = -1;
+	saveCursorPosition[1] = -1;
 
 	consoleModel = EDSiRetail;
 	languageSet = false;
@@ -30,9 +39,7 @@ TWLSettings::TWLSettings()
 	guiLanguage = ELangDefault;
 	currentLanguage = ELangDefault;
 	titleLanguage = ELangDefault;
-	fps = 60;
 	macroMode = false;
-	colorMode = 0;
 	// blfLevel = 0;
 	sleepMode = true;
 	kioskMode = false;
@@ -45,22 +52,26 @@ TWLSettings::TWLSettings()
 	gbar2DldiAccess = false;
 	showMainMenu = false;
 	showSelectMenu = false;
+	rocketRobzLogo = true;
 	theme = EThemeDSi;
 	settingsMusic = ESMusicTheme;
-	dsiMusic = EMusicRegular;
+	dsiMusic = EMusicTheme;
 	boxArtColorDeband = false;
 
 	gbaBooter = isDSiMode() ? EGbaGbar2 : EGbaNativeGbar2;
+	gbaR3Test = false;
 	colEmulator = EColSegaColecoDS;
 	sgEmulator = EColSegaColecoDS;
-	cpcEmulator = ECpcAmEDS;
 	mdEmulator = EMegaDriveHybrid;
 	//snesEmulator = true;
 	updateRecentlyPlayedList = true;
 	sortMethod = ESortAlphabetical;
+	hideEmptyBoxes = false;
 	showDirectories = true;
 	showHidden = false;
-	showBoxArt = 0;
+	showPhoto = true;
+	showBoxArt = 1;
+	filenameDisplay = 0;
 	animateDsiIcons = true;
 	showCustomIcons = true;
 	preventDeletion = false;
@@ -69,12 +80,13 @@ TWLSettings::TWLSettings()
 	secondaryAccess = false;
 	previousUsedDevice = !sys().isRunFromSD();
 	secondaryDevice = !sys().isRunFromSD();
-	fcSaveOnSd = false;
+	saveLocation = ESavesFolder;
 
-	flashcard = EDSTTClone;
 	slot1LaunchMethod = EDirect;
 
 	dsiSplash = isDSiMode();
+	oppositeSplash = false;
+	dsiSplashEasterEggs = true;
 	dsiSplashAutoSkip = false;
 	nintendoLogoColor = 1;
 	showlogo = true;
@@ -100,7 +112,6 @@ TWLSettings::TWLSettings()
 
 	slot1AccessSD = false;
 	slot1SCFGUnlock = false;
-	slot1TouchMode = false;
 	ezFlashRam = false;
 	limitedMode = 0;
 	dontShowDSiWareInDSModeWarning = false;
@@ -110,15 +121,17 @@ TWLSettings::TWLSettings()
 	smsGgInRam = false;
 	esrbRatingScreen = false;
 
-	// ak_viewMode = EViewInternal;
+	ak_viewMode = EViewInternal;
 	// ak_scrollSpeed = EScrollFast;
-	// ak_theme = "zelda";
-	// ak_zoomIcons = true;
+	ak_theme = "zelda";
+	ak_zoomIcons = true;
 
 	useBootstrap = true;
 	btsrpBootloaderDirect = false;
 	bootstrapFile = EReleaseBootstrap;
+	kernelUseable = true;
 
+	internetBrowserLaunched = false;
 	slot1Launched = false;
 	launchType[0] = ENoLaunch;
 	launchType[1] = ENoLaunch;
@@ -131,9 +144,10 @@ TWLSettings::TWLSettings()
 	gameLanguage = ELangDefault;
 	gameRegion = ERegionDefault;
 	useRomRegion = true;
-	extendedMemory = 0;
+	boostCpuForClut = true;
 	forceSleepPatch = false;
 	soundFreq = EFreq32KHz;
+	saveRelocation = ERelocOnSDCard;
 }
 
 void TWLSettings::loadSettings()
@@ -146,12 +160,27 @@ void TWLSettings::loadSettings()
 
 	// UI settings.
 	romfolder[0] = settingsini.GetString("SRLOADER", "ROM_FOLDER", romfolder[0]);
+	defaultRomfolder[0] = settingsini.GetString("SRLOADER", "INITIAL_ROM_FOLDER", "null");
+
 	romfolder[1] = settingsini.GetString("SRLOADER", "SECONDARY_ROM_FOLDER", romfolder[1]);
+	defaultRomfolder[1] = settingsini.GetString("SRLOADER", "INITIAL_SECONDARY_ROM_FOLDER", "null");
+
+	// Overwrite rom folder with the default one, if available.
+	bool usingdefaultdir[2] = { false, false };
+	for (int i = 0; i < 2; ++i) { 
+		if (!defaultRomfolder[i].empty() && defaultRomfolder[i] != "null") {
+			romfolder[i] = defaultRomfolder[i];
+			usingdefaultdir[i] = true;
+		}
+	}
+
 	if (sdFound() && (strncmp(romfolder[0].c_str(), "sd:", 3) != 0 || access(romfolder[0].c_str(), F_OK) != 0)) {
 		romfolder[0] = "sd:/";
+		usingdefaultdir[0] = true;
 	}
 	if (flashcardFound() && (strncmp(romfolder[1].c_str(), "fat:", 4) != 0 || access(romfolder[1].c_str(), F_OK) != 0)) {
 		romfolder[1] = "fat:/";
+		usingdefaultdir[1] = true;
 	}
 
 	romPath[0] = settingsini.GetString("SRLOADER", "ROM_PATH", romPath[0]);
@@ -163,11 +192,18 @@ void TWLSettings::loadSettings()
 		romPath[1] = "";
 	}
 
-	pagenum[0] = settingsini.GetInt("SRLOADER", "PAGE_NUMBER", pagenum[0]);
-	pagenum[1] = settingsini.GetInt("SRLOADER", "SECONDARY_PAGE_NUMBER", pagenum[1]);
-
-	cursorPosition[0] = settingsini.GetInt("SRLOADER", "CURSOR_POSITION", cursorPosition[0]);
-	cursorPosition[1] = settingsini.GetInt("SRLOADER", "SECONDARY_CURSOR_POSITION", cursorPosition[1]);
+	cursorAlwaysAtStart = settingsini.GetInt("SRLOADER", "CURSOR_ALWAYS_AT_START", cursorAlwaysAtStart);
+	if (!cursorAlwaysAtStart) {
+		// Only remember cursor pos if we don't have default dirs
+		if (!usingdefaultdir[0]) {
+			pagenum[0] = settingsini.GetInt("SRLOADER", "PAGE_NUMBER", pagenum[0]);
+			cursorPosition[0] = settingsini.GetInt("SRLOADER", "CURSOR_POSITION", cursorPosition[0]);
+		}
+		if (!usingdefaultdir[1]) {
+			pagenum[1] = settingsini.GetInt("SRLOADER", "SECONDARY_PAGE_NUMBER", pagenum[1]);
+			cursorPosition[1] = settingsini.GetInt("SRLOADER", "SECONDARY_CURSOR_POSITION", cursorPosition[1]);
+		}
+	}
 
 	consoleModel = (TConsoleModel)settingsini.GetInt("SRLOADER", "CONSOLE_MODEL", consoleModel);
 	languageSet = settingsini.GetInt("SRLOADER", "LANGUAGE_SET", languageSet);
@@ -178,10 +214,7 @@ void TWLSettings::loadSettings()
 	guiLanguage = (TLanguage)settingsini.GetInt("SRLOADER", "LANGUAGE", guiLanguage);
 	currentLanguage = guiLanguage;
 	titleLanguage = (TLanguage)settingsini.GetInt("SRLOADER", "TITLELANGUAGE", titleLanguage);
-	fps = settingsini.GetInt("SRLOADER", "FRAME_RATE", fps);
 	macroMode = settingsini.GetInt("SRLOADER", "MACRO_MODE", macroMode);
-	colorMode = settingsini.GetInt("SRLOADER", "COLOR_MODE", colorMode);
-	// blfLevel = settingsini.GetInt("SRLOADER", "BLUE_LIGHT_FILTER_LEVEL", blfLevel);
 	sleepMode = settingsini.GetInt("SRLOADER", "SLEEP_MODE", sleepMode);
 	kioskMode = settingsini.GetInt("SRLOADER", "KIOSK_MODE", kioskMode);
 	dsiWareExploit = (TExploit)settingsini.GetInt("SRLOADER", "DSIWARE_EXPLOIT", dsiWareExploit);
@@ -197,27 +230,26 @@ void TWLSettings::loadSettings()
 	gbar2DldiAccess = settingsini.GetInt("SRLOADER", "GBAR2_DLDI_ACCESS", gbar2DldiAccess);
 	showMainMenu = settingsini.GetInt("SRLOADER", "SHOW_MAIN_MENU", showMainMenu);
 	showSelectMenu = settingsini.GetInt("SRLOADER", "SHOW_SELECT_MENU", showSelectMenu);
+	rocketRobzLogo = settingsini.GetInt("SRLOADER", "ROCKET_ROBZ_LOGO", rocketRobzLogo);
 	theme = (TTheme)settingsini.GetInt("SRLOADER", "THEME", theme);
 	settingsMusic = (TSettingsMusic)settingsini.GetInt("SRLOADER", "SETTINGS_MUSIC", settingsMusic);
 	dsiMusic = (TDSiMusic)settingsini.GetInt("SRLOADER", "DSI_MUSIC", dsiMusic);
 	boxArtColorDeband = settingsini.GetInt("SRLOADER", "PHOTO_BOXART_COLOR_DEBAND", boxArtColorDeband);
 
-	if (sys().isRegularDS() && *(u16*)(0x020000C0) != 0) {
+	if (sys().isRegularDS()) {
 		gbaBooter = (TGbaBooter)settingsini.GetInt("SRLOADER", "SHOW_GBA", gbaBooter);
 		if (gbaBooter == 0) // 0 (don't show) is deprecated
 			gbaBooter = EGbaNativeGbar2;
 	} else {
 		gbaBooter = EGbaGbar2;
 	}
+	// gbaR3Test = settingsini.GetInt("SRLOADER", "GBARUNNER3_TEST", gbaR3Test);
 	colEmulator = (TColSegaEmulator)settingsini.GetInt("SRLOADER", "SHOW_COL", colEmulator);
 	if (colEmulator == 0) // 0 (don't show) is deprecated
 		colEmulator = EColSegaColecoDS;
 	sgEmulator = (TColSegaEmulator)settingsini.GetInt("SRLOADER", "SHOW_SG", sgEmulator);
 	if (sgEmulator == 0) // 0 (don't show) is deprecated
 		sgEmulator = EColSegaColecoDS;
-	cpcEmulator = (TCpcEmulator)settingsini.GetInt("SRLOADER", "SHOW_CPC", cpcEmulator);
-	if (cpcEmulator == 0) // 0 (don't show) is deprecated
-		cpcEmulator = ECpcAmEDS;
 	if (!(isDSiMode() && (access("sd:/", F_OK) == 0) && sys().arm7SCFGLocked())) {
 		mdEmulator = (TMegaDriveEmulator)settingsini.GetInt("SRLOADER", "SHOW_MDGEN", mdEmulator);
 		if (mdEmulator == 0) // 0 (don't show) is deprecated
@@ -228,11 +260,14 @@ void TWLSettings::loadSettings()
 	//snesEmulator = settingsini.GetInt("SRLOADER", "SNES_EMULATOR", snesEmulator);
 	updateRecentlyPlayedList = settingsini.GetInt("SRLOADER", "UPDATE_RECENTLY_PLAYED_LIST", updateRecentlyPlayedList);
 	sortMethod = (TSortMethod)settingsini.GetInt("SRLOADER", "SORT_METHOD", sortMethod);
+	hideEmptyBoxes = settingsini.GetInt("SRLOADER", "HIDE_EMPTY_BOXES", hideEmptyBoxes);
 	showDirectories = settingsini.GetInt("SRLOADER", "SHOW_DIRECTORIES", showDirectories);
 	showHidden = settingsini.GetInt("SRLOADER", "SHOW_HIDDEN", showHidden);
+	showPhoto = settingsini.GetInt("SRLOADER", "SHOW_PHOTO", showPhoto);
 	showBoxArt = settingsini.GetInt("SRLOADER", "SHOW_BOX_ART", showBoxArt);
 	if (!dsiFeatures() && showBoxArt == 2) // Reset to 1 if not in DSi mode
 		showBoxArt = 1;
+	filenameDisplay = settingsini.GetInt("SRLOADER", "FILENAME_DISPLAY", filenameDisplay);
 	animateDsiIcons = settingsini.GetInt("SRLOADER", "ANIMATE_DSI_ICONS", animateDsiIcons);
 	showCustomIcons = settingsini.GetInt("SRLOADER", "SHOW_CUSTOM_ICONS", showCustomIcons);
 	preventDeletion = settingsini.GetInt("SRLOADER", "PREVENT_ROM_DELETION", preventDeletion);
@@ -243,13 +278,14 @@ void TWLSettings::loadSettings()
 	secondaryAccess = settingsini.GetInt("SRLOADER", "SECONDARY_ACCESS", secondaryAccess);
 	previousUsedDevice = settingsini.GetInt("SRLOADER", "PREVIOUS_USED_DEVICE", previousUsedDevice);
 	secondaryDevice = bothSDandFlashcard() ? settingsini.GetInt("SRLOADER", "SECONDARY_DEVICE", secondaryDevice) : flashcardFound();
-	fcSaveOnSd = settingsini.GetInt("SRLOADER", "FC_SAVE_ON_SD", fcSaveOnSd);
+	saveLocation = (TSaveLoc)settingsini.GetInt("SRLOADER", "SAVE_LOCATION", saveLocation);
 	settingsini.GetStringVector("SRLOADER", "BLOCKED_EXTENSIONS", blockedExtensions, ':');
 
-	flashcard = settingsini.GetInt("SRLOADER", "FLASHCARD", flashcard);
 	slot1LaunchMethod = (TSlot1LaunchMethod)settingsini.GetInt("SRLOADER", "SLOT1_LAUNCHMETHOD", slot1LaunchMethod);
 
 	dsiSplash = settingsini.GetInt("SRLOADER", "DSI_SPLASH", dsiSplash);
+	oppositeSplash = settingsini.GetInt("SRLOADER", "OPPOSITE_SPLASH", oppositeSplash);
+	dsiSplashEasterEggs = settingsini.GetInt("SRLOADER", "DSI_SPLASH_EASTER_EGGS", dsiSplashEasterEggs);
 	dsiSplashAutoSkip = settingsini.GetInt("SRLOADER", "DSI_SPLASH_AUTO_SKIP", dsiSplashAutoSkip);
 	nintendoLogoColor = settingsini.GetInt("SRLOADER", "NINTENDO_LOGO_COLOR", nintendoLogoColor);
 	showlogo = settingsini.GetInt("SRLOADER", "SHOWLOGO", showlogo);
@@ -277,7 +313,6 @@ void TWLSettings::loadSettings()
 
 	slot1AccessSD = settingsini.GetInt("SRLOADER", "SLOT1_ENABLESD", slot1AccessSD);
 	slot1SCFGUnlock = settingsini.GetInt("SRLOADER", "SLOT1_SCFG_UNLOCK", slot1SCFGUnlock);
-	slot1TouchMode = settingsini.GetInt("SRLOADER", "SLOT1_TOUCH_MODE", slot1TouchMode);
 	ezFlashRam = settingsini.GetInt("SRLOADER", "EZ_FLASH_RAM", ezFlashRam);
 	limitedMode = settingsini.GetInt("SRLOADER", "LIMITED_MODE", limitedMode);
 	dontShowDSiWareInDSModeWarning = settingsini.GetInt("SRLOADER", "DONT_SHOW_DSIWARE_IN_DS_MODE_WARNING", dontShowDSiWareInDSModeWarning);
@@ -287,12 +322,26 @@ void TWLSettings::loadSettings()
 	smsGgInRam = settingsini.GetInt("SRLOADER", "SMS_GG_IN_RAM", smsGgInRam);
 	esrbRatingScreen = settingsini.GetInt("SRLOADER", "ESRB_RATING_SCREEN", esrbRatingScreen);
 
-	// ak_viewMode = settingsini.GetInt("SRLOADER", "AK_VIEWMODE", ak_viewMode);
+	ak_viewMode = settingsini.GetInt("SRLOADER", "AK_VIEWMODE", ak_viewMode);
 	// ak_scrollSpeed = settingsini.GetInt("SRLOADER", "AK_SCROLLSPEED", ak_scrollSpeed);
-	// ak_theme = settingsini.GetString("SRLOADER", "AK_THEME", ak_theme);
-	// ak_zoomIcons = settingsini.GetInt("SRLOADER", "AK_ZOOM_ICONS", ak_zoomIcons);
+	ak_theme = settingsini.GetString("SRLOADER", "AK_THEME", ak_theme);
+	ak_zoomIcons = settingsini.GetInt("SRLOADER", "AK_ZOOM_ICONS", ak_zoomIcons);
 
-	if (!(io_dldi_data->ioInterface.features & FEATURE_SLOT_GBA)) {
+	kernelUseable = (io_dldi_data->ioInterface.features & FEATURE_SLOT_NDS);
+	if (kernelUseable) {
+		const bool woodKernel = (
+		(memcmp(io_dldi_data->friendlyName, "R4iDSN", 6) == 0)
+	 || (memcmp(io_dldi_data->friendlyName, "R4iTT", 5) == 0)
+	 || (memcmp(io_dldi_data->friendlyName, "Acekard AK2", 11) == 0)
+	 || (memcmp(io_dldi_data->friendlyName, "Ace3DS+", 7) == 0)
+	);
+
+		if (woodKernel) {
+			kernelUseable = !dsiFeatures();
+		}
+	}
+
+	if (kernelUseable) {
 		useBootstrap = settingsini.GetInt("SRLOADER", "USE_BOOTSTRAP", useBootstrap);
 	} else {
 		useBootstrap = true;
@@ -300,6 +349,8 @@ void TWLSettings::loadSettings()
 	btsrpBootloaderDirect = settingsini.GetInt("SRLOADER", "BOOTSTRAP_BOOTLOADER_DIRECT", btsrpBootloaderDirect);
 	bootstrapFile = (TBootstrapFile)settingsini.GetInt("SRLOADER", "BOOTSTRAP_FILE", bootstrapFile);
 
+	internetBrowserPath = settingsini.GetString("SRLOADER", "INTERNET_BROWSER_PATH", internetBrowserPath);
+	internetBrowserLaunched = settingsini.GetInt("SRLOADER", "INTERNET_BROWSER_LAUNCHED", internetBrowserLaunched);
 	dsiWareSrlPath = settingsini.GetString("SRLOADER", "DSIWARE_SRL", dsiWareSrlPath);
 	dsiWarePubPath = settingsini.GetString("SRLOADER", "DSIWARE_PUB", dsiWarePubPath);
 	dsiWarePrvPath = settingsini.GetString("SRLOADER", "DSIWARE_PRV", dsiWarePrvPath);
@@ -318,9 +369,10 @@ void TWLSettings::loadSettings()
 	gameLanguage = (TLanguage)settingsini.GetInt("NDS-BOOTSTRAP", "LANGUAGE", gameLanguage);
 	gameRegion = (TRegion)settingsini.GetInt("NDS-BOOTSTRAP", "REGION", gameRegion);
 	useRomRegion = settingsini.GetInt("NDS-BOOTSTRAP", "USE_ROM_REGION", useRomRegion);
-	extendedMemory = settingsini.GetInt("NDS-BOOTSTRAP", "EXTENDED_MEMORY", extendedMemory);
+	boostCpuForClut = settingsini.GetInt("NDS-BOOTSTRAP", "BOOST_CPU_FOR_CLUT", boostCpuForClut);
 	forceSleepPatch = settingsini.GetInt("NDS-BOOTSTRAP", "FORCE_SLEEP_PATCH", forceSleepPatch);
 	soundFreq = (TSoundFreq)settingsini.GetInt("NDS-BOOTSTRAP", "SOUND_FREQ", soundFreq);
+	saveRelocation = (TSaveRelocation)settingsini.GetInt("NDS-BOOTSTRAP", "SAVE_RELOCATION", saveRelocation);
 }
 
 void TWLSettings::saveSettings()
@@ -329,16 +381,34 @@ void TWLSettings::saveSettings()
 
 	// UI settings.
 	settingsini.SetString("SRLOADER", "ROM_FOLDER", romfolder[0]);
+	settingsini.SetString("SRLOADER", "INITIAL_ROM_FOLDER", defaultRomfolder[0]);
 	settingsini.SetString("SRLOADER", "SECONDARY_ROM_FOLDER", romfolder[1]);
+	settingsini.SetString("SRLOADER", "INITIAL_SECONDARY_ROM_FOLDER", defaultRomfolder[1]);
 
 	settingsini.SetString("SRLOADER", "ROM_PATH", romPath[0]);
 	settingsini.SetString("SRLOADER", "SECONDARY_ROM_PATH", romPath[1]);
 
-	settingsini.SetInt("SRLOADER", "PAGE_NUMBER", pagenum[0]);
-	settingsini.SetInt("SRLOADER", "SECONDARY_PAGE_NUMBER", pagenum[1]);
+	settingsini.SetInt("SRLOADER", "CURSOR_ALWAYS_AT_START", cursorAlwaysAtStart);
+	if (!cursorAlwaysAtStart) {
+		// Cursor position.
+		if (saveCursorPosition[0] == -1) {
+			settingsini.SetInt("SRLOADER", "PAGE_NUMBER", pagenum[0]);
+			settingsini.SetInt("SRLOADER", "CURSOR_POSITION", cursorPosition[0]);
+		} else {
+			// Overwrite cursor pos
+			settingsini.SetInt("SRLOADER", "PAGE_NUMBER", saveCursorPosition[0]/40);
+			settingsini.SetInt("SRLOADER", "CURSOR_POSITION", saveCursorPosition[0]%40);
+		}
 
-	settingsini.SetInt("SRLOADER", "CURSOR_POSITION", cursorPosition[0]);
-	settingsini.SetInt("SRLOADER", "SECONDARY_CURSOR_POSITION", cursorPosition[1]);
+		if (saveCursorPosition[1] == -1) {
+			settingsini.SetInt("SRLOADER", "SECONDARY_PAGE_NUMBER", pagenum[1]);
+			settingsini.SetInt("SRLOADER", "SECONDARY_CURSOR_POSITION", cursorPosition[1]);
+		} else {
+			// Overwrite cursor pos
+			settingsini.SetInt("SRLOADER", "SECONDARY_PAGE_NUMBER", saveCursorPosition[1]/40);
+			settingsini.SetInt("SRLOADER", "SECONDARY_CURSOR_POSITION", saveCursorPosition[1]%40);
+		}
+	}
 
 	settingsini.SetInt("SRLOADER", "CONSOLE_MODEL", consoleModel);
 	settingsini.SetInt("SRLOADER", "LANGUAGE_SET", languageSet);
@@ -348,10 +418,8 @@ void TWLSettings::saveSettings()
 	settingsini.SetInt("SRLOADER", "LOGGING", logging);
 	settingsini.SetInt("SRLOADER", "LANGUAGE", guiLanguage);
 	settingsini.SetInt("SRLOADER", "TITLELANGUAGE", titleLanguage);
-	settingsini.SetInt("SRLOADER", "FRAME_RATE", fps);
 	settingsini.SetInt("SRLOADER", "MACRO_MODE", macroMode);
-	settingsini.SetInt("SRLOADER", "COLOR_MODE", colorMode);
-	// settingsini.SetInt("SRLOADER", "BLUE_LIGHT_FILTER_LEVEL", blfLevel);
+	settingsini.SetInt("SRLOADER", "SLEEP_MODE", sleepMode);
 	settingsini.SetInt("SRLOADER", "DSIWARE_EXPLOIT", dsiWareExploit);
 	settingsini.SetInt("SRLOADER", "WIFI_LED", wifiLed);
 	settingsini.SetInt("SRLOADER", "WIFI_LED_VER", wifiLedVer);
@@ -361,26 +429,29 @@ void TWLSettings::saveSettings()
 	settingsini.SetInt("SRLOADER", "GBAR2_DLDI_ACCESS", gbar2DldiAccess);
 	settingsini.SetInt("SRLOADER", "SHOW_MAIN_MENU", showMainMenu);
 	settingsini.SetInt("SRLOADER", "SHOW_SELECT_MENU", showSelectMenu);
+	settingsini.SetInt("SRLOADER", "ROCKET_ROBZ_LOGO", rocketRobzLogo);
 	settingsini.SetInt("SRLOADER", "THEME", theme);
 	settingsini.SetInt("SRLOADER", "SETTINGS_MUSIC", settingsMusic);
 	settingsini.SetInt("SRLOADER", "DSI_MUSIC", dsiMusic);
 	settingsini.SetInt("SRLOADER", "PHOTO_BOXART_COLOR_DEBAND", boxArtColorDeband);
 
-	if (sys().isRegularDS() && *(u16*)(0x020000C0) != 0) {
+	if (sys().isRegularDS()) {
 		settingsini.SetInt("SRLOADER", "SHOW_GBA", gbaBooter);
 	}
 	settingsini.SetInt("SRLOADER", "SHOW_COL", colEmulator);
 	settingsini.SetInt("SRLOADER", "SHOW_SG", sgEmulator);
-	settingsini.SetInt("SRLOADER", "SHOW_CPC", cpcEmulator);
 	if (!(isDSiMode() && (access("sd:/", F_OK) == 0) && sys().arm7SCFGLocked())) {
 		settingsini.SetInt("SRLOADER", "SHOW_MDGEN", mdEmulator);
 	}
 	// settingsini.SetInt("SRLOADER", "SNES_EMULATOR", snesEmulator);
 	settingsini.SetInt("SRLOADER", "UPDATE_RECENTLY_PLAYED_LIST", updateRecentlyPlayedList);
 	settingsini.SetInt("SRLOADER", "SORT_METHOD", sortMethod);
+	settingsini.SetInt("SRLOADER", "HIDE_EMPTY_BOXES", hideEmptyBoxes);
 	settingsini.SetInt("SRLOADER", "SHOW_DIRECTORIES", showDirectories);
 	settingsini.SetInt("SRLOADER", "SHOW_HIDDEN", showHidden);
+	settingsini.SetInt("SRLOADER", "SHOW_PHOTO", showPhoto);
 	settingsini.SetInt("SRLOADER", "SHOW_BOX_ART", showBoxArt);
+	settingsini.SetInt("SRLOADER", "FILENAME_DISPLAY", filenameDisplay);
 	settingsini.SetInt("SRLOADER", "ANIMATE_DSI_ICONS", animateDsiIcons);
 	settingsini.SetInt("SRLOADER", "SHOW_CUSTOM_ICONS", showCustomIcons);
 	settingsini.SetInt("SRLOADER", "PREVENT_ROM_DELETION", preventDeletion);
@@ -393,12 +464,12 @@ void TWLSettings::saveSettings()
 	if (bothSDandFlashcard()) {
 		settingsini.SetInt("SRLOADER", "SECONDARY_DEVICE", secondaryDevice);
 	}
-	settingsini.SetInt("SRLOADER", "FC_SAVE_ON_SD", fcSaveOnSd);
+	settingsini.SetInt("SRLOADER", "SAVE_LOCATION", saveLocation);
 
-	settingsini.SetInt("SRLOADER", "FLASHCARD", flashcard);
 	settingsini.SetInt("SRLOADER", "SLOT1_LAUNCHMETHOD", slot1LaunchMethod);
 
 	settingsini.SetInt("SRLOADER", "DSI_SPLASH", dsiSplash);
+	settingsini.SetInt("SRLOADER", "DSI_SPLASH_EASTER_EGGS", dsiSplashEasterEggs);
 	settingsini.SetInt("SRLOADER", "DSI_SPLASH_AUTO_SKIP", dsiSplashAutoSkip);
 	settingsini.SetInt("SRLOADER", "NINTENDO_LOGO_COLOR", nintendoLogoColor);
 	settingsini.SetInt("SRLOADER", "SHOWLOGO", showlogo);
@@ -424,7 +495,6 @@ void TWLSettings::saveSettings()
 
 	settingsini.SetInt("SRLOADER", "SLOT1_ENABLESD", slot1AccessSD);
 	settingsini.SetInt("SRLOADER", "SLOT1_SCFG_UNLOCK", slot1SCFGUnlock);
-	settingsini.SetInt("SRLOADER", "SLOT1_TOUCH_MODE", slot1TouchMode);
 	settingsini.SetInt("SRLOADER", "LIMITED_MODE", limitedMode);
 	settingsini.SetInt("SRLOADER", "DONT_SHOW_DSIWARE_IN_DS_MODE_WARNING", dontShowDSiWareInDSModeWarning);
 	settingsini.SetInt("SRLOADER", "DSIWARE_BOOTER", dsiWareBooter);
@@ -432,17 +502,19 @@ void TWLSettings::saveSettings()
 	settingsini.SetInt("SRLOADER", "SMS_GG_IN_RAM", smsGgInRam);
 	settingsini.SetInt("SRLOADER", "ESRB_RATING_SCREEN", esrbRatingScreen);
 
-	// settingsini.SetInt("SRLOADER", "AK_VIEWMODE", ak_viewMode);
+	settingsini.SetInt("SRLOADER", "AK_VIEWMODE", ak_viewMode);
 	// settingsini.SetInt("SRLOADER", "AK_SCROLLSPEED", ak_scrollSpeed);
-	// settingsini.SetString("SRLOADER", "AK_THEME", ak_theme);
-	// settingsini.SetInt("SRLOADER", "AK_ZOOM_ICONS", ak_zoomIcons);
+	settingsini.SetString("SRLOADER", "AK_THEME", ak_theme);
+	settingsini.SetInt("SRLOADER", "AK_ZOOM_ICONS", ak_zoomIcons);
 
-	if (!(io_dldi_data->ioInterface.features & FEATURE_SLOT_GBA)) {
+	if (kernelUseable) {
 		settingsini.SetInt("SRLOADER", "USE_BOOTSTRAP", useBootstrap);
 	}
 	settingsini.SetInt("SRLOADER", "BOOTSTRAP_BOOTLOADER_DIRECT", btsrpBootloaderDirect);
 	settingsini.SetInt("SRLOADER", "BOOTSTRAP_FILE", bootstrapFile);
 
+	settingsini.SetString("SRLOADER", "INTERNET_BROWSER_PATH", internetBrowserPath);
+	settingsini.SetInt("SRLOADER", "INTERNET_BROWSER_LAUNCHED", internetBrowserLaunched);
 	settingsini.SetString("SRLOADER", "DSIWARE_SRL", dsiWareSrlPath);
 	settingsini.SetString("SRLOADER", "DSIWARE_PUB", dsiWarePubPath);
 	settingsini.SetString("SRLOADER", "DSIWARE_PRV", dsiWarePrvPath);
@@ -450,7 +522,7 @@ void TWLSettings::saveSettings()
 	settingsini.SetInt("SRLOADER", "LAUNCH_TYPE", launchType[0]);
 	settingsini.SetInt("SRLOADER", "SECONDARY_LAUNCH_TYPE", launchType[1]);
 	settingsini.SetString("SRLOADER", "HOMEBREW_ARG", homebrewArg[0]);
-	settingsini.SetString("SRLOADER", "SECONDARY_HOMEBREW_ARG", homebrewArg[0]);
+	settingsini.SetString("SRLOADER", "SECONDARY_HOMEBREW_ARG", homebrewArg[1]);
 	settingsini.SetInt("SRLOADER", "HOMEBREW_BOOTSTRAP", homebrewBootstrap);
 	settingsini.SetInt("SRLOADER", "HOMEBREW_HAS_WIDE", 0);
 
@@ -461,9 +533,10 @@ void TWLSettings::saveSettings()
 	settingsini.SetInt("NDS-BOOTSTRAP", "LANGUAGE", gameLanguage);
 	settingsini.SetInt("NDS-BOOTSTRAP", "REGION", gameRegion);
 	settingsini.SetInt("NDS-BOOTSTRAP", "USE_ROM_REGION", useRomRegion);
-	settingsini.SetInt("NDS-BOOTSTRAP", "EXTENDED_MEMORY", extendedMemory);
+	settingsini.SetInt("NDS-BOOTSTRAP", "BOOST_CPU_FOR_CLUT", boostCpuForClut);
 	settingsini.SetInt("NDS-BOOTSTRAP", "FORCE_SLEEP_PATCH", forceSleepPatch);
 	settingsini.SetInt("NDS-BOOTSTRAP", "SOUND_FREQ", soundFreq);
+	settingsini.SetInt("NDS-BOOTSTRAP", "SAVE_RELOCATION", saveRelocation);
 
 	settingsini.SaveIniFileModified(settingsinipath);
 }
@@ -558,6 +631,14 @@ std::string TWLSettings::getGuiLanguageString()
 			return "ca";
 		case TWLSettings::ELangRyukyuan:
 			return "ry";
+		case TWLSettings::ELangCzech:
+			return "cs";
+		case TWLSettings::ELangFinnish:
+			return "fi";
+		case TWLSettings::ELangKazakh:
+			return "kk";
+		case TWLSettings::ELangGalician:
+			return "gl";
 	}
 }
 

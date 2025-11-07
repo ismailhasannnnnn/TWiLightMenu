@@ -14,8 +14,6 @@
 
 extern bool boxArtColorDeband;
 
-extern int boxArtType[40];
-
 using std::unique_ptr;
 using std::min;
 using std::vector;
@@ -39,9 +37,32 @@ private:
 	void loadVolumeTextures();
 	void loadBatteryTextures();
 	void loadUITextures();
-	void loadIconTextures();
 
 public:
+	void loadIconGBTexture();
+	void loadIconGBATexture();
+	void loadIconGGTexture();
+	void loadIconMDTexture();
+	void loadIconNESTexture();
+	void loadIconSGTexture();
+	void loadIconSMSTexture();
+	void loadIconSNESTexture();
+	void loadIconPLGTexture();
+	void loadIconA26Texture();
+	void loadIconCOLTexture();
+	void loadIconM5Texture();
+	void loadIconINTTexture();
+	void loadIconPCETexture();
+	void loadIconWSTexture();
+	void loadIconNGPTexture();
+	void loadIconCPCTexture();
+	void loadIconVIDTexture();
+	void loadIconIMGTexture();
+	void loadIconMSXTexture();
+	void loadIconMINITexture();
+	void loadIconHBTexture();
+	void loadIconUnknownTexture();
+
 	static unsigned short *beginBgSubModify();
 	static void commitBgSubModify();
 	static void commitBgSubModifyAsync();
@@ -51,15 +72,15 @@ public:
 	static void commitBgMainModifyAsync();
 
 	void drawTopBg();
-	void drawTopBgAvoidingShoulders();
 
 	void drawProfileName();
 	void resetProfileName();
 	void drawBottomBg(int bg);
 
 	void loadBoxArtToMem(const char *filename, int num);
-	void drawBoxArt(const char* filename);
-	void drawBoxArtFromMem(int num);
+	void drawBoxArt(const char* filename, bool inMem);
+	void drawOverBoxArt(uint photoWidth, uint photoHeight);
+	void drawOverRotatingCubes();
 
 	void drawVolumeImage(int volumeLevel);
 	void drawVolumeImageMacro(int volumeLevel);
@@ -76,10 +97,12 @@ public:
 	void drawDateTimeMacro(const char* date, int posX, int posY, bool isDate);
 
 	void clearTopScreen();
+	void unloadRotatingCubes();
+	void unloadPhotoBuffer();
+	void reloadPhotoBuffer();
 	static void videoSetup();
 private:
 	void applyUserPaletteToAllGrfTextures();
-	void applyGrayscaleToAllGrfTextures();
 
 	void loadBubbleImage(const Texture& tex, int sprW, int sprH);
 	void loadProgressImage(const Texture& tex);
@@ -163,6 +186,9 @@ public:
 	const Texture *iconCPCTexture() { return _iconCPCTexture.get(); }
 	const Texture *iconVIDTexture() { return _iconVIDTexture.get(); }
 	const Texture *iconIMGTexture() { return _iconIMGTexture.get(); }
+	const Texture *iconMSXTexture() { return _iconMSXTexture.get(); }
+	const Texture *iconMINITexture() { return _iconMINITexture.get(); }
+	const Texture *iconHBTexture() { return _iconHBTexture.get(); }
 	const Texture *iconUnknownTexture() { return _iconUnknownTexture.get(); }
 
 	const Texture *leftShoulderTexture() { return _leftShoulderTexture.get(); }
@@ -172,8 +198,8 @@ public:
 
 	FontGraphic *dateTimeFont() { return _dateTimeFont.get(); }
 	FontGraphic *usernameFont() { extern FontGraphic *smallFont; return _usernameFont ? _usernameFont.get() : smallFont; }
+	FontGraphic *smallFont() { extern FontGraphic *smallFont; return smallFont; }
 
-	static u16* bmpImageBuffer();
 	static u16* bgSubBuffer2();
 	static u16* photoBuffer();
 	static u16* photoBuffer2();
@@ -297,6 +323,9 @@ private:
 	unique_ptr<Texture> _iconCPCTexture;
 	unique_ptr<Texture> _iconVIDTexture;
 	unique_ptr<Texture> _iconIMGTexture;
+	unique_ptr<Texture> _iconMSXTexture;
+	unique_ptr<Texture> _iconMINITexture;
+	unique_ptr<Texture> _iconHBTexture;
 	unique_ptr<Texture> _iconUnknownTexture;
 
 	unique_ptr<Texture> _volume0Texture;

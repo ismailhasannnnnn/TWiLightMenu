@@ -47,6 +47,7 @@ Helpful information:
 #undef ARM9
 #define ARM7
 #include <nds/arm7/audio.h>
+#include "dmaTwl.h"
 #include "common/tonccpy.h"
 #include "sdmmc.h"
 #include "i2c.h"
@@ -54,8 +55,6 @@ Helpful information:
 #include "dldi_patcher.h"
 #include "card.h"
 #include "boot.h"
-
-void arm7clearRAM();
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // Important things
@@ -163,6 +162,28 @@ void passArgs_ARM7 (void) {
 
 
 
+static void initMBK_dsiMode(void) {
+	// This function has no effect with ARM7 SCFG locked
+	*(vu32*)REG_MBK1 = *(u32*)0x02FFE180;
+	*(vu32*)REG_MBK2 = *(u32*)0x02FFE184;
+	*(vu32*)REG_MBK3 = *(u32*)0x02FFE188;
+	*(vu32*)REG_MBK4 = *(u32*)0x02FFE18C;
+	*(vu32*)REG_MBK5 = *(u32*)0x02FFE190;
+	REG_MBK6 = *(u32*)0x02FFE1A0;
+	REG_MBK7 = *(u32*)0x02FFE1A4;
+	REG_MBK8 = *(u32*)0x02FFE1A8;
+	REG_MBK9 = *(u32*)0x02FFE1AC;
+}
+
+void memset_addrs_arm7(u32 start, u32 end)
+{
+	if (!dsiMode && !(REG_SCFG_EXT & BIT(16))) {
+		toncset((u32*)start, 0, ((int)end - (int)start));
+		return;
+	}
+	dma_twlFill32(0, 0, (u32*)start, ((int)end - (int)start));
+}
+
 /*-------------------------------------------------------------------------
 resetMemory_ARM7
 Clears all of the NDS's RAM that is visible to the ARM7
@@ -209,19 +230,21 @@ void resetMemory_ARM7 (void)
 	REG_IPC_FIFO_CR = IPC_FIFO_ENABLE | IPC_FIFO_SEND_CLEAR;
 	REG_IPC_FIFO_CR = 0;
 
-	arm7clearRAM();
+	memset_addrs_arm7(0x03800000 - 0x8000, 0x03800000 + (dsiMode ? 0xC000 : 0x10000)); // clear exclusive IWRAM
 	// clear most of EWRAM - except after RAM end - 0xc000, which has the bootstub
 	if (dsiMode && loadFromRam) {
-		toncset((void*)0x02004000, 0, 0x7FC000);
-		toncset((void*)0x02D00000, 0, 0x2F4000);
+		memset_addrs_arm7(0x02004000, 0x02800000);
+		memset_addrs_arm7(0x02D00000, 0x02FF4000);
 	} else {
-		toncset((void*)0x02004000, 0, dsiMode ? 0xFF0000 : 0x3F0000);
+		memset_addrs_arm7(0x02004000, dsiMode ? 0x02FF4000 : 0x023F4000);
 	}
 
 	REG_IE = 0;
 	REG_IF = ~0;
-	(*(vu32*)(0x04000000-4)) = 0;  //IRQ_HANDLER ARM7 version
-	(*(vu32*)(0x04000000-8)) = ~0; //VBLANK_INTR_WAIT_FLAGS, ARM7 version
+	REG_AUXIE = 0;
+	REG_AUXIF = ~0;
+	*(vu32*)0x0380FFFC = 0;  // IRQ_HANDLER ARM7 version
+	*(vu32*)0x0380FFF8 = 0; // VBLANK_INTR_WAIT_FLAGS, ARM7 version
 	REG_POWERCNT = 1;  //turn off power to stuff
 
 	// Get settings location
@@ -250,8 +273,6 @@ u32 ROM_TID;
 void loadBinary_ARM7 (u32 fileCluster)
 {
 	if (loadFromRam) {
-		bool isDSi = (*(vu32*)(0x08240000) != 1);
-
 		//u32 ARM9_SRC = *(u32*)(TWL_HEAD+0x20);
 		char* ARM9_DST = (char*)*(u32*)(TWL_HEAD+0x28);
 		u32 ARM9_LEN = *(u32*)(TWL_HEAD+0x2C);
@@ -261,8 +282,8 @@ void loadBinary_ARM7 (u32 fileCluster)
 
 		ROM_TID = *(u32*)(TWL_HEAD+0xC);
 
-		tonccpy(ARM9_DST, (char*)(isDSi ? 0x02800000 : 0x09000000), ARM9_LEN);
-		tonccpy(ARM7_DST, (char*)(isDSi ? 0x02B80000 : 0x09380000), ARM7_LEN);
+		tonccpy(ARM9_DST, (char*)0x02800000, ARM9_LEN);
+		tonccpy(ARM7_DST, (char*)0x02B80000, ARM7_LEN);
 
 		// first copy the header to its proper location, excluding
 		// the ARM9 start address, so as not to start it
@@ -283,10 +304,11 @@ void loadBinary_ARM7 (u32 fileCluster)
 				tonccpy(ARM9i_DST, (char*)0x02C00000, ARM9i_LEN);
 			if (ARM7i_LEN)
 				tonccpy(ARM7i_DST, (char*)0x02C80000, ARM7i_LEN);
+
+			initMBK_dsiMode();
 		}
 
-		if (isDSi)
-			toncset((void*)0x02800000, 0, 0x500000);
+		toncset((void*)0x02800000, 0, 0x500000);
 
 		return;
 	}
@@ -331,6 +353,8 @@ void loadBinary_ARM7 (u32 fileCluster)
 			fileRead(ARM9i_DST, fileCluster, ARM9i_SRC, ARM9i_LEN);
 		if (ARM7i_LEN)
 			fileRead(ARM7i_DST, fileCluster, ARM7i_SRC, ARM7i_LEN);
+
+		initMBK_dsiMode();
 	}
 }
 
@@ -364,6 +388,25 @@ int main (void) {
 #ifndef NO_SDMMC
 	sdRead = (dsiSD && dsiMode);
 #endif
+	toncset((u32*)0x06000000, 0, 0x8000);
+	if (wantToPatchDLDI) {
+		if (*(u32*)0x02FF4184 == 0x69684320) { // DLDI ' Chi' string in bootstub space + bootloader in DLDI driver space
+			const u16 dldiFileSize = 1 << *(u8*)0x02FF418D;
+			tonccpy((u32*)0x06000000, (u32*)0x02FF4180, dldiFileSize);
+			dldiRelocateBinary();
+
+			toncset((u32*)0x02FF4000, 0, 0x8180); // Clear bootstub + DLDI driver
+		} else if (*(u32*)0x02FF8004 == 0x69684320) { // DLDI ' Chi' string
+			const u16 dldiFileSize = 1 << *(u8*)0x02FF800D;
+			tonccpy((u32*)0x06000000, (u32*)0x02FF8000, (dldiFileSize > 0x4000) ? 0x4000 : dldiFileSize);
+			dldiClearBss();
+		} else if (*(u32*)0x02FF8000 == 0x53535A4C) { // LZ77 flag
+			dldiDecompressBinary();
+		} else {
+			return -1;
+		}
+	}
+
 	u32 fileCluster = storedFileCluster;
 	if (!loadFromRam) {
 		// Init card
@@ -435,6 +478,7 @@ int main (void) {
 	// Patch with DLDI if desired
 	if (wantToPatchDLDI) {
 		dldiPatchBinary ((u8*)((u32*)NDS_HEAD)[0x0A], ((u32*)NDS_HEAD)[0x0B]);
+		toncset((u32*)0x06000000, 0, 0x8000);
 	}
 #endif
 

@@ -28,7 +28,7 @@ STRING(LOCATION_SD, "Location: SD Card")
 // Errors
 STRING(START_FAILED_ERROR, "Start failed. Error %i")
 STRING(GBA_BIOS_ERROR, "Error code: BINF")
-STRING(GBA_BIOS_ERROR_DESC, "The GBA BIOS is required\nto run GBA games.\nPlease place the BIOS on the\nroot as \"bios.bin\".")
+STRING(GBA_BIOS_ERROR_DESC, "The GBA BIOS is required.\nPlease place \"bios.bin\"\nin \"root:/_gba/\".")
 STRING(BOOTSTRAP_NIGHTLY_NOT_FOUND, "nds-bootstrap (Nightly) not found.")
 STRING(BOOTSTRAP_RELEASE_NOT_FOUND, "nds-bootstrap (Release) not found.")
 STRING(BOOTSTRAP_HB_NIGHTLY_NOT_FOUND, "nds-bootstrap for homebrew\n(Nightly) not found.")
@@ -58,28 +58,48 @@ STRING(RAM_LIMIT_SPECIFIC_AREA, "Due to memory limitations, the\ngame will crash
 STRING(RAM_LIMIT_CERTAIN_POINT, "Due to memory limitations,\nthe game will crash at certain\npoint(s). To work around the crash,\nlaunch this on Nintendo DSi\nor 3DS systems.")
 STRING(RAM_LIMIT_STATE, "Due to memory limitations, the\ngame will run in a limited\nstate. To play the full version,\nlaunch this on Nintendo DSi\nor 3DS systems.")
 STRING(RAM_LIMIT_NO_SAVE_STATE, "Due to no save support, the\ngame will run in a limited\nstate. To play the full version,\nlaunch this on Nintendo DSi\nor 3DS systems.")
+STRING(RAM_LIMIT_NO_SOUND_FX, "Due to memory limitations,\nsound effects will not be played.\nTo play this game with sound\neffects, launch this on Nintendo\nDSi or 3DS systems.")
 STRING(INSERT_MEMORY_EXPANSION_PAK, "To launch this title, please\ninsert the Memory Expansion Pak.")
 STRING(INSERT_SLOT2_RAM_CART, "To launch this title, please\nturn off the POWER, and\ninsert a Slot-2 memory\nexpansion cart which isn't the\nMemory Expansion Pak.")
 STRING(INSERT_LARGER_THAN_MEP, "This title requires a larger\namount of memory than the\nExpansion Pak. Please turn off\nthe POWER, and insert a\nSlot-2 cart with more memory.")
+STRING(MEMORY_EXPANSION_PAK_UNAVAILABLE, "This title requires the Memory\nExpansion Pak, but the slot\nto insert it does not exist.\nAs a result, this title cannot\nbe launched.")
+STRING(SLOT2_RAM_CART_UNAVAILABLE, "This title requires a Slot-2\nexpansion cart, but the slot\nto insert it does not exist.\nAs a result, this title cannot\nbe launched.")
 STRING(TWLMENU_ALREADY_RUNNING, "TWiLight Menu++ is\nalready running.")
 STRING(CANNOT_LAUNCH_WITHOUT_SD, "This game cannot be launched\nwithout an SD card.")
 STRING(CANNOT_LAUNCH_IN_DS_MODE, "This game cannot be launched\nin DS mode.")
 STRING(CANNOT_LAUNCH_HB_ON_3DS, "This homebrew cannot be\nlaunched on 3DS consoles.")
+STRING(CANNOT_LAUNCH_WITH_UI, "Cannot launch this title.\nPlease switch to a different user\ninterface, then try again.")
+STRING(CANNOT_LAUNCH_CORRUPT_TITLE_SD, "Cannot launch this title.\nEither the title or SD Card\nis corrupted.")
+STRING(CANNOT_LAUNCH_CORRUPT_TITLE_MICRO_SD, "Cannot launch this title.\nEither the title or microSD Card\nis corrupted.")
 STRING(PRESS_B_RETURN, "Press \\B to return.")
 STRING(BAD_CLUSTER_SIZE, "Your SD card is not formatted\nusing 32KB clusters, this causes\nsome games to load very slowly.\nIt's recommended to reformat your\nSD card using 32KB clusters.")
 
+// Pictochat
+STRING(NO_PICTOCHAT_MSG, "Unable to launch Pictochat.\nPlease place \"pictochat.nds\"\nin the \"_nds\" folder.")
+
+// DS Download Play
+STRING(NO_DLPLAY_MSG, "Unable to launch DS Download\nPlay. Please place \"dlplay.nds\"\nin the \"_nds\" folder.")
+
+// Internet Browser
+STRING(NO_INTERNET_BROWSER_MSG_NTR, "There is no Internet Browser\ncurrently set. Look for\nthe Nintendo DS\nBrowser, press \\Y, and select\n\"Set as Internet Browser\".")
+STRING(NO_INTERNET_BROWSER_MSG, "There is no Internet Browser\ncurrently set. Look for\nthe Nintendo DS or DSi\nBrowser, press \\Y, and select\n\"Set as Internet Browser\".")
+
 // Donor ROM
 STRING(DONOR_ROM_MSG_SDK20, "Please set a different SDK2.0\ntitle as a donor ROM, in order\nto launch this title.")
+STRING(DONOR_ROM_MSG_SDK5, "Please set an SDK5 Nintendo DS\ntitle as a donor ROM, in order\nto launch this title.")
 STRING(DONOR_ROM_MSG_SDK5TWL, "Please set a DSi-Enhanced title\nas a donor ROM, in order\nto launch this title.")
 STRING(DONOR_ROM_MSG_SDK50TWL, "Please set an SDK5.0 DSi-Enhanced\ntitle as a donor ROM, in order\nto launch this title.")
 STRING(DONOR_ROM_MSG_SDK5TWLONLY, "Please set a different DSi(Ware)\ntitle as a donor ROM, in order\nto launch this title.")
 STRING(DONOR_ROM_MSG_SDK50TWLONLY, "Please set a different SDK5.0\nDSi(Ware) title as a donor ROM,\nin order to launch this title.")
 STRING(DONOR_ROM_MSG_SDK5TWLONLY_DSI_MODE, "Please set a DSi(Ware) title\nas a donor ROM, in order\nto launch this title in DSi mode.")
 STRING(HOW_TO_SET_DONOR_ROM_SDK20, "Find the SDK2.0 title,\npress \\Y, and select\n\"Set as Donor ROM\".")
+STRING(HOW_TO_SET_DONOR_ROM_SDK5, "Find the SDK5 DS title,\npress \\Y, and select\n\"Set as Donor ROM\".")
+STRING(HOW_TO_SET_DONOR_ROM_VRAM_WIFI_SDK5, "Find the VRAM-WiFi SDK5 DS\ntitle, press \\Y, and select\n\"Set as Donor ROM\".")
 STRING(HOW_TO_SET_DONOR_ROM_SDK5TWL, "Find the DSi-Enhanced title,\npress \\Y, and select\n\"Set as Donor ROM\".")
 STRING(HOW_TO_SET_DONOR_ROM_SDK50TWL, "Find the SDK5.0 DSi-Enhanced\ntitle, press \\Y, and\nselect \"Set as Donor ROM\".")
 STRING(HOW_TO_SET_DONOR_ROM_SDK5TWLONLY, "Find the DSi(Ware) title,\npress \\Y, and select\n\"Set as Donor ROM\".")
 STRING(HOW_TO_SET_DONOR_ROM_SDK50TWLONLY, "Find the SDK5.0 DSi(Ware)\ntitle, press \\Y, and\nselect \"Set as Donor ROM\".")
+STRING(DONOR_ROM_INCOMPATIBLE_VRAM_WIFI_SDK5, "The currently set donor ROM is\nincompatible with this title.\nPlease find a VRAM-WiFi SDK5\nDStitle to set as a donor ROM.")
 
 // Hiding
 STRING(ARE_YOU_SURE_UNHIDE, "Are you sure you want to\nunhide this folder?")
@@ -106,9 +126,14 @@ STRING(OPEN_MANUAL, "Open Manual")
 STRING(SELECT_B_BACK_A_SELECT, "SELECT/\\B Back, \\A Select")
 
 // AP
-STRING(AP_PATCH_RGF, "This game has AP (Anti-Piracy)\nand MUST be patched using the\nRGF TWiLight Menu AP patcher.")
-STRING(AP_USE_LATEST, "This game has AP (Anti-Piracy).\nPlease make sure you're\nusing the latest version of\nTWiLight Menu++.")
+STRING(AP_USE_LATEST, "This game has AP (Anti-Piracy).\nPlease make sure you're\nusing the latest version of\nnds-bootstrap.")
 STRING(B_A_OK_X_DONT_SHOW, "\\B/\\A OK, \\X Don't show again")
+
+// Default Directory Selector
+STRING(DEFAULT_DIR_SET, "Do you want to set this\nas the default directory\nfor this device?")
+STRING(DEFAULT_DIR_ALREADY, "This is already the\ndefault directory\nfor this device!")
+STRING(X_SET_DEFAULT_DIR, "\\X Set Default Directory")
+STRING(Y_DISABLE, "\\Y Disable")
 
 // Misc buttons
 STRING(A_OK, "\\A OK")
@@ -117,11 +142,14 @@ STRING(B_BACK, "\\B Back")
 STRING(Y_DS_MODE_B_BACK, "\\Y Launch in DS mode  \\B Back")
 STRING(L, "\\L")
 STRING(L_PREV, "\\L Prev Page")
+STRING(PREV, "Previous")
 STRING(R, "\\R")
 STRING(NEXT_R, "Next Page \\R")
+STRING(NEXT, "Next")
 
 // Per-game settings
 STRING(SDK_VER, "SDK ver: %s")
+STRING(DS_PHAT_COLORS, "DS Phat Colors")
 STRING(LANGUAGE, "Language")
 STRING(REGION, "Region")
 STRING(RAM_DISK, "RAM disk")
@@ -135,14 +163,15 @@ STRING(SWI_HALT_HOOK, "SWI Halt Hook")
 STRING(DIRECT_BOOT, "Direct Boot")
 STRING(SCREEN_ASPECT_RATIO, "Screen Aspect Ratio")
 STRING(SET_AS_DONOR_ROM, "Set as Donor ROM")
-STRING(EXPAND_ROM_SPACE, "Ex. ROM space in RAM")
 STRING(DSIWAREBOOTER, "DSiWare Booter")
 STRING(GAME_LOADER, "Game Loader")
+STRING(SET_AS_INTERNET_BROWSER, "Set as Internet Browser")
 STRING(DONE, "Done!")
 STRING(X_CHEATS_B_BACK, "\\X Cheats  \\B Back")
 
 // Per-game settings options
 STRING(DEFAULT, "Default")
+STRING(DIRECT, "Direct")
 STRING(GAME, "Game")
 STRING(SYSTEM, "System")
 STRING(NONE, "None")
@@ -182,15 +211,24 @@ STRING(CHEATS, "Cheats")
 STRING(SAVING, "Saving...")
 STRING(LOADING, "Loading...")
 STRING(NO_CHEATS_FOUND, "No cheats found")
+STRING(CHEATS_CANNOT_BE_USED, "Cheats cannot be used.")
+STRING(CHEATS_DISCARD_CHANGES, "Discard unsaved changes?")
 STRING(CHEATS_FOLDER, "\\A Open  \\X Save  \\B Cancel")
 STRING(CHEATS_SELECTED, "\\A Deselect  \\X Save  \\B Cancel")
 STRING(CHEATS_DESELECTED, "\\A Select  \\X Save  \\B Cancel")
 STRING(CHEATS_FOLDER_INFO, "\\A Open  \\Y Info  \\X Save  \\B Cancel")
 STRING(CHEATS_SELECTED_INFO, "\\A Desel.  \\Y Info  \\X Save  \\B Cancel")
 STRING(CHEATS_DESELECTED_INFO, "\\A Select  \\Y Info  \\X Save  \\B Cancel")
+STRING(CHEATS_DISCARD_BUTTONS, "\\A Discard    \\B Cancel")
 
 // SD removal errors
 STRING(ERROR_HAS_OCCURRED, "An error has occurred.")
 STRING(DISABLE_SD_REMOVAL_CHECK, "Please turn off the power, turn\nthe power back on, relaunch\nTWiLight Menu++, hold SELECT to\nopen TWLMenu++ Settings, and\ndisable SD removal detection.")
 STRING(SD_WAS_REMOVED, "The SD card was removed.")
 STRING(REINSERT_SD_CARD, "Please press POWER to turn off\nthe power, reinsert the SD card,\nthen turn the power back on.")
+
+// Save Relcation
+STRING(SAVE_RELOCATION, "Save Relocation")
+STRING(SAVE_MICRO_SD, "microSD Card")
+STRING(SAVE_SD, "SD Card")
+STRING(SAVE_GAME_CARD, "Game Card")

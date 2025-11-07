@@ -1,34 +1,34 @@
 #include "Texture.h"
+#include "paletteEffects.h"
 #include "common/tonccpy.h"
 #include "common/twlmenusettings.h"
 #include "common/lodepng.h"
+// #include "common/ColorLut.h"
 #include <math.h>
 
 extern bool useTwlCfg;
+extern u16* colorTable;
 
-Texture::Texture(const std::string &filePath, const std::string &fallback)
+Texture::Texture(const std::string &filePath, const std::string &fallback1, const std::string &fallback2)
 	: _paletteLength(0), _texLength(0), _texCmpLength(0), _texHeight(0), _texWidth(0), _type(TextureType::Unknown) {
 	std::string pngPath;
-	FILE *file;
-	for (const char *extension : extensions) {
-		file = fopen((filePath + extension).c_str(), "rb");
-		if (file) {
-			_type = findType(file);
-			if (_type == TextureType::Unknown) {
-				fclose(file);
-
-			} else {
-				pngPath = filePath + extension;
-				break;
+	FILE *file = NULL;
+	const std::string *paths[] = {&filePath, &fallback1, &fallback2};
+	int i = 0;
+	do {
+		for (const char *extension : extensions) {
+			file = fopen((*paths[i] + extension).c_str(), "rb");
+			if (file) {
+				_type = findType(file);
+				if (_type == TextureType::Unknown) {
+					fclose(file);
+				} else {
+					pngPath = *paths[i] + extension;
+					break;
+				}
 			}
 		}
-	}
-
-	if (!file) {
-		file = fopen(fallback.c_str(), "rb");
-		_type = findType(file);
-		pngPath = fallback;
-	}
+	} while (!file && ++i < 3);
 
 	switch (_type) {
 	case TextureType::PalettedGrf:
@@ -139,6 +139,9 @@ void Texture::loadBitmap(FILE *file) noexcept {
 			u8 b = lroundf((color & 0xFF) * 31 / 255.0f) & 0x1F;
 
 			_palette[i] = BIT(15) | b << 10 | g << 5 | r;
+			if (colorTable) {
+				_palette[i] = colorTable[_palette[i] % 0x8000] | BIT(15);
+			}
 		}
 	}
 
@@ -202,10 +205,11 @@ void Texture::loadPaletted(FILE *file) noexcept {
 	fseek(file, 2 * sizeof(u32), SEEK_CUR);
 	u32 paletteLength = 0;
 	fread(&paletteLength, sizeof(u32), 1, file);
-	_paletteLength = (paletteLength >> 9); // palette length in shorts. / sizoef(unsighed shor)
+	_paletteLength = (paletteLength >> 9); // palette length in shorts. / sizeof(unsighed shor)
 
 	_palette = std::make_unique<u16[]>(_paletteLength);
 	fread(_palette.get(), sizeof(u16), _paletteLength, file);
+	effectColorModePalette(_palette.get(), _paletteLength);
 }
 
 
@@ -268,32 +272,11 @@ u16 Texture::bmpToDS(u16 val) {
 	if ((val & 0x7FFF) == 0x7C1F)
 		return 0;
 
-	// int blfLevel = ms().blfLevel;
-	if (ms().colorMode == 1) {
-		u8 b = val & 31;
-		u8 g = (val >> 5) & 31;
-		u8 r = (val >> 10) & 31;
-
-		// Value decomposition of hsv
-		u8 max = std::max(std::max(b, g), r);
-		u8 min = std::min(std::min(b, g), r);
-
-		// Desaturate
-		max = (max + min) / 2;
-
-		return max | max << 5 | max << 10 | BIT(15);
-		// return max | (max & (31 - 3 * blfLevel)) << 5 | (max & (31 - 6 * blfLevel)) << 10 | BIT(15);
-	} else {
-		return ((val >> 10) & 31) | (val & (31 << 5)) | ((val & 31) << 10) | BIT(15);
-		// return ((val >> 10) & 31) | ((val >> 5) & (31 - 3 * blfLevel)) << 5 | (val & (31 - 6 * blfLevel)) << 10 | BIT(15);
+	val = ((val >> 10) & 31) | (val & (31 << 5)) | ((val & 31) << 10) | BIT(15);
+	if (colorTable) {
+		return colorTable[val % 0x8000] | BIT(15);
 	}
-}
-
-bool Texture::exists(const std::string &filePath) {
-	for (const char *extension : extensions) {
-		if (access((filePath + extension).c_str(), F_OK) == 0) return true;
-	}
-	return false;
+	return val;
 }
 
 void Texture::copy(u16 *dst, bool vram) const {
@@ -312,6 +295,7 @@ void Texture::copy(u16 *dst, bool vram) const {
 			break;
 		case TextureType::CompressedGrf:
 			decompress((u8 *)_texture.get(), (u8 *)dst, vram ? LZ77Vram : LZ77);
+			effectColorModeBmpPalette(dst, _texLength);
 			break;
 		case TextureType::Unknown:
 		case TextureType::Bitmap: // ingore the bitfields

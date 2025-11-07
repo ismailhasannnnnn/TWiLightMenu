@@ -18,15 +18,16 @@
 
 ------------------------------------------------------------------*/
 #pragma once
+#define REFRESH_EVERY_VBLANKS 60
+
+extern u16* colorTable;
 
 bool screenFadedIn(void);
 bool screenFadedOut(void);
 void SetBrightness(u8 screen, s8 bright);
 void initSubSprites(void);
-void bottomBgLoad(bool startMenu);
 void graphicsInit();
 void graphicsLoad();
-void topBgLoad(bool startMenu);
 void startRendering(bool top);
 bool isRenderingTop();
 

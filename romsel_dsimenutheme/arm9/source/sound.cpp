@@ -4,6 +4,7 @@
 #include "graphics/themefilenames.h"
 #include "common/twlmenusettings.h"
 #include "common/systemdetails.h"
+#include "common/logging.h"
 #include "graphics/fontHandler.h"
 #include "language.h"
 #include "fileCopy.h"
@@ -160,10 +161,16 @@ SoundControl::SoundControl()
 	    128,		     // panning
 	};
 
+	sfxDataLoaded = true;
+}
 
+void SoundControl::loadStream(const bool prepMsg) {
 	if (ms().dsiMusic == 0 || ms().theme == TWLSettings::EThemeSaturn) {
 		return;
 	}
+
+	alloc_streaming_buf();
+	resetStreamSettings();
 
 	bool loopableMusic = false;
 	loopingPoint = false;
@@ -175,57 +182,31 @@ SoundControl::SoundControl()
 	stream.sampling_rate = 16000;	 		// 16000Hz
 	stream.format = MM_STREAM_16BIT_MONO;  // select format
 
-	// Leave top scren white
-	controlTopBright = false;
-
-	printLarge(false, 0, 88 - (calcLargeFontHeight(STR_PREPARING_MUSIC) - largeFontHeight()) / 2, STR_PREPARING_MUSIC, Alignment::center);
-	updateText(false);
-
 	if (ms().theme == TWLSettings::EThemeSaturn) {
 		stream_source = fopen(std::string(TFN_DEFAULT_SOUND_BG).c_str(), "rb");
 	} else {
 		switch(ms().dsiMusic) {
-			case 5: { // HBL
-				std::string startPath = (devicePath+TFN_HBL_START_SOUND_BG_CACHE);
-				if (access(startPath.c_str(), F_OK) != 0 || getFileSize(startPath.c_str()) == 0) {
-					if (adpcm_main(std::string(TFN_HBL_START_SOUND_BG).c_str(), startPath.c_str(), true) == -1) {
-						remove(startPath.c_str());
-					}
+			case 5: // HBL
+			case 2: // DSi Shop
+			{	std::string loopPath = std::string(ms().dsiMusic == 5 ? TFN_HBL_LOOP_SOUND_BG : TFN_SHOP_LOOP_SOUND_BG);
+				if (access(loopPath.c_str(), F_OK) == 0) {
+					stream_start_source = fopen(std::string(ms().dsiMusic == 5 ? TFN_HBL_START_SOUND_BG : TFN_SHOP_START_SOUND_BG).c_str(), "rb");
+					stream_source = fopen(loopPath.c_str(), "rb");
+					logPrint(ms().dsiMusic == 5 ? "Using HBL music\n" : "Using DSi Shop music\n");
+
+					// Read properties from WAV header
+					u8 numChannels = 1;
+					fseek(stream_source, 0x16, SEEK_SET);
+					fread(&numChannels, sizeof(u8), 1, stream_source);
+					stream.format = numChannels == 2 ? MM_STREAM_8BIT_STEREO : MM_STREAM_16BIT_MONO;
+					fseek(stream_source, 0x18, SEEK_SET);
+					fread(&stream.sampling_rate, sizeof(u16), 1, stream_source);
+
+					seekPos = 0x2C;
+					loopableMusic = true;
+					break;
 				}
-				std::string loopPath = (devicePath+TFN_HBL_LOOP_SOUND_BG_CACHE);
-				if (access(loopPath.c_str(), F_OK) != 0 || getFileSize(loopPath.c_str()) == 0) {
-					if (adpcm_main(std::string(TFN_HBL_LOOP_SOUND_BG).c_str(), loopPath.c_str(), true) == -1) {
-						remove(startPath.c_str());
-						remove(loopPath.c_str());
-					}
-				}
-				stream.sampling_rate = 44100;	 		// 44100Hz
-				stream.format = MM_STREAM_8BIT_STEREO;
-				stream_start_source = fopen(startPath.c_str(), "rb");
-				stream_source = fopen(loopPath.c_str(), "rb");
-				loopableMusic = true;
-				break; }
-			case 4:
-			case 2: { // DSi Shop
-				std::string startPath = (devicePath+TFN_SHOP_START_SOUND_BG_CACHE);
-				if (access(startPath.c_str(), F_OK) != 0 || getFileSize(startPath.c_str()) == 0) {
-					if (adpcm_main(std::string(TFN_SHOP_START_SOUND_BG).c_str(), startPath.c_str(), true) == -1) {
-						remove(startPath.c_str());
-					}
-				}
-				std::string loopPath = (devicePath+TFN_SHOP_LOOP_SOUND_BG_CACHE);
-				if (access(loopPath.c_str(), F_OK) != 0 || getFileSize(loopPath.c_str()) == 0) {
-					if (adpcm_main(std::string(TFN_SHOP_LOOP_SOUND_BG).c_str(), loopPath.c_str(), true) == -1) {
-						remove(startPath.c_str());
-						remove(loopPath.c_str());
-					}
-				}
-				stream.sampling_rate = 44100;	 		// 44100Hz
-				stream.format = MM_STREAM_8BIT_STEREO;
-				stream_start_source = fopen(startPath.c_str(), "rb");
-				stream_source = fopen(loopPath.c_str(), "rb");
-				loopableMusic = true;
-				break; }
+			}
 			case 3: { // Theme
 				bool customSkin = false;
 				switch (ms().theme) {
@@ -244,10 +225,18 @@ SoundControl::SoundControl()
 						break;
 				}
 				if (customSkin) {
+					std::string musicStartPath = TFN_START_SOUND_BG;
 					std::string musicPath = TFN_SOUND_BG;
+					std::string cacheStartPath = TFN_START_SOUND_BG_CACHE;
 					std::string cachePath = TFN_SOUND_BG_CACHE;
 					bool closed = false;
 					if (access(musicPath.c_str(), F_OK) == 0) {
+						loopableMusic = (access(musicStartPath.c_str(), F_OK) == 0);
+						if (loopableMusic) {
+							logPrint("Using custom theme music\n");
+							stream_start_source = fopen(musicStartPath.c_str(), "rb");
+						}
+
 						// Read properties from WAV header
 						u8 wavFormat = 0;
 						u8 numChannels = 1;
@@ -261,11 +250,37 @@ SoundControl::SoundControl()
 						fread(&stream.sampling_rate, sizeof(u16), 1, stream_source);
 
 						if (wavFormat == 0x11) {
-							// If ADPCM and hasn't been successfully converted yet, do so now
-							if(access(cachePath.c_str(), F_OK) != 0 || getFileSize(cachePath.c_str()) == 0) {
+							// If music is ADPCM and hasn't been successfully converted yet, do so now
+							bool doClearText = false;
+							if (loopableMusic && (access(cacheStartPath.c_str(), F_OK) != 0 || getFileSize(cacheStartPath.c_str()) == 0)) { // Start point
+								if (prepMsg) {
+									clearText(false);
+									printLarge(false, 0, 88 - (calcLargeFontHeight(STR_PREPARING_MUSIC) - largeFontHeight()) / 2, STR_PREPARING_MUSIC, Alignment::center);
+									updateText(false);
+									doClearText = true;
+								}
+								if (adpcm_main(musicStartPath.c_str(), cacheStartPath.c_str(), numChannels == 2) == -1) {
+									remove(cacheStartPath.c_str());
+								}
+							}
+							if (access(cachePath.c_str(), F_OK) != 0 || getFileSize(cachePath.c_str()) == 0) { // Loop point
+								if (prepMsg && !doClearText) {
+									clearText(false);
+									printLarge(false, 0, 88 - (calcLargeFontHeight(STR_PREPARING_MUSIC) - largeFontHeight()) / 2, STR_PREPARING_MUSIC, Alignment::center);
+									updateText(false);
+									doClearText = true;
+								}
 								if (adpcm_main(musicPath.c_str(), cachePath.c_str(), numChannels == 2) == -1) {
 									remove(cachePath.c_str());
 								}
+							}
+							if (prepMsg && doClearText) {
+								clearText(false);
+								extern void displayNowLoading(void);
+								displayNowLoading();
+							}
+							if (loopableMusic) {
+								fclose(stream_start_source);
 							}
 							fclose(stream_source);
 							closed = true;
@@ -273,28 +288,52 @@ SoundControl::SoundControl()
 							seekPos = 0x2C;
 						}
 					} else {
+						loopableMusic = (access(cacheStartPath.c_str(), F_OK) == 0);
 						closed = true;
 					}
-					if (closed) stream_source = fopen(cachePath.c_str(), "rb");
+					if (closed) {
+						if (loopableMusic) {
+							stream_start_source = fopen(cacheStartPath.c_str(), "rb");
+						}
+						stream_source = fopen(cachePath.c_str(), "rb");
+					}
 					if (stream_source) break; } // fallthrough if stream_source fails.
 				}
+			case 4:
 			case 1:
 			default: {
-				std::string musicPath = (devicePath+TFN_DEFAULT_SOUND_BG_CACHE);
-				if (access(musicPath.c_str(), F_OK) != 0 || getFileSize(musicPath.c_str()) == 0) {
-					if (adpcm_main(std::string(TFN_DEFAULT_SOUND_BG).c_str(), musicPath.c_str(), true) == -1) {
-						remove(musicPath.c_str());
+				const bool use3DSMusic = (ms().dsiMusic == 4 || (ms().dsiMusic == 3 && ms().theme == TWLSettings::ETheme3DS)) && (access(std::string(TFN_DEFAULT_SOUND_BG_3D).c_str(), F_OK) == 0);
+				const bool useHBLMusic = (ms().dsiMusic == 3) && (ms().theme == TWLSettings::EThemeHBL) && (access(std::string(TFN_HBL_LOOP_SOUND_BG).c_str(), F_OK) == 0);
+				bool useBetterDSiMusic = false;
+				if (useHBLMusic) {
+					logPrint("Using HBL music\n");
+					stream_start_source = fopen(std::string(TFN_HBL_START_SOUND_BG).c_str(), "rb");
+					loopableMusic = true;
+				} else if (use3DSMusic) {
+					logPrint("Using 3DS menu music\n");
+				} else {
+					logPrint("Using DSi menu music\n");
+					useBetterDSiMusic = (access(std::string(TFN_BETTER_DEFAULT_SOUND_BG).c_str(), F_OK) == 0);
+					if (useBetterDSiMusic) {
+						logPrint("Better version detected\n");
 					}
 				}
-				stream.sampling_rate = 32000;	 		// 32000Hz
-				stream.format = MM_STREAM_8BIT_STEREO;
-				stream_source = fopen(musicPath.c_str(), "rb");
+				stream_source = fopen(std::string(useHBLMusic ? TFN_HBL_LOOP_SOUND_BG : (use3DSMusic ? TFN_DEFAULT_SOUND_BG_3D : (useBetterDSiMusic ? TFN_BETTER_DEFAULT_SOUND_BG : TFN_DEFAULT_SOUND_BG))).c_str(), "rb");
+
+				// Read properties from WAV header
+				u8 numChannels = 1;
+				fseek(stream_source, 0x16, SEEK_SET);
+				fread(&numChannels, sizeof(u8), 1, stream_source);
+				stream.format = numChannels == 2 ? MM_STREAM_8BIT_STEREO : MM_STREAM_16BIT_MONO;
+				fseek(stream_source, 0x18, SEEK_SET);
+				fread(&stream.sampling_rate, sizeof(u16), 1, stream_source);
+
+				seekPos = 0x2C;
 				break; }
 		}
 	}
 
-	clearText();
-	controlTopBright = true;
+	logPrint("\n");
 
 	fseek(stream_source, seekPos, SEEK_SET);
 
@@ -306,7 +345,8 @@ SoundControl::SoundControl()
 	if (loopableMusic) {
 		fseek(stream_start_source, 0, SEEK_END);
 		size_t fileSize = ftell(stream_start_source);
-		fseek(stream_start_source, 0, SEEK_SET);
+		fileSize -= seekPos;
+		fseek(stream_start_source, seekPos, SEEK_SET);
 
 		// Prep the first section of the stream
 		fread((void*)play_stream_buf, sizeof(s16), STREAMING_BUF_LENGTH, stream_start_source);
@@ -346,16 +386,123 @@ SoundControl::SoundControl()
 	}
 }
 
-mm_sfxhand SoundControl::playLaunch() { return mmEffectEx(&snd_launch); }
-mm_sfxhand SoundControl::playSelect() { return mmEffectEx(&snd_select); }
-mm_sfxhand SoundControl::playBack() { return mmEffectEx(&snd_back); }
-mm_sfxhand SoundControl::playSwitch() { return mmEffectEx(&snd_switch); }
-mm_sfxhand SoundControl::playStartup() { return mmEffectEx(&mus_startup); }
-mm_sfxhand SoundControl::playStop() { return mmEffectEx(&snd_stop); }
-mm_sfxhand SoundControl::playWrong() { return mmEffectEx(&snd_wrong); }
+void SoundControl::reloadSfxData() {
+	FILE* soundbank_file;
+
+	if (ms().theme == TWLSettings::EThemeSaturn) {
+		soundbank_file = fopen(std::string(TFN_SATURN_SOUND_EFFECTBANK).c_str(), "rb");
+	} else {
+		switch(ms().dsiMusic) {
+			case 3:
+				soundbank_file = fopen(std::string(TFN_SOUND_EFFECTBANK).c_str(), "rb");
+				if (soundbank_file) break; // fallthrough if soundbank_file fails.
+			case 1:
+			case 2:
+			default:
+				soundbank_file = fopen(std::string(TFN_DEFAULT_SOUND_EFFECTBANK).c_str(), "rb");
+				break;
+		}
+	}
+
+	fseek(soundbank_file, 0, SEEK_END);
+	size_t sfxDataSize = ftell(soundbank_file);
+	fseek(soundbank_file, 0, SEEK_SET);
+
+	SFX_DATA = new char[sfxDataSize > 0x7D000 ? 0x7D000 : sfxDataSize];
+	fread((void*)SFX_DATA, 1, sfxDataSize, soundbank_file);
+
+	fclose(soundbank_file);
+
+	mmSoundBankInMemory((mm_addr)SFX_DATA);
+
+	mmLoadEffect(SFX_LAUNCH);
+	mmLoadEffect(SFX_SELECT);
+	mmLoadEffect(SFX_STOP);
+	mmLoadEffect(SFX_WRONG);
+	mmLoadEffect(SFX_BACK);
+	mmLoadEffect(SFX_SWITCH);
+	mmLoadEffect(SFX_STARTUP);
+	// mmLoadEffect(SFX_MENU);
+
+	snd_launch = {
+	    {SFX_LAUNCH},	    // id
+	    (int)(1.0f * (1 << 10)), // rate
+	    0,			     // handle
+	    255,		     // volume
+	    128,		     // panning
+	};
+	snd_select = {
+	    {SFX_SELECT},	    // id
+	    (int)(1.0f * (1 << 10)), // rate
+	    0,			     // handle
+	    255,		     // volume
+	    128,		     // panning
+	};
+	snd_stop = {
+	    {SFX_STOP},		     // id
+	    (int)(1.0f * (1 << 10)), // rate
+	    0,			     // handle
+	    255,		     // volume
+	    128,		     // panning
+	};
+	snd_wrong = {
+	    {SFX_WRONG},	     // id
+	    (int)(1.0f * (1 << 10)), // rate
+	    0,			     // handle
+	    255,		     // volume
+	    128,		     // panning
+	};
+	snd_back = {
+	    {SFX_BACK},		     // id
+	    (int)(1.0f * (1 << 10)), // rate
+	    0,			     // handle
+	    255,		     // volume
+	    128,		     // panning
+	};
+	snd_switch = {
+	    {SFX_SWITCH},	    // id
+	    (int)(1.0f * (1 << 10)), // rate
+	    0,			     // handle
+	    255,		     // volume
+	    128,		     // panning
+	};
+	mus_startup = {
+	    {SFX_STARTUP},	   // id
+	    (int)(1.0f * (1 << 10)), // rate
+	    0,			     // handle
+	    255,		     // volume
+	    128,		     // panning
+	};
+
+	sfxDataLoaded = true;
+}
+
+void SoundControl::unloadSfxData() {
+	if (!sfxDataLoaded) return;
+	sfxDataLoaded = false;
+
+	mmUnloadEffect(SFX_LAUNCH);
+	mmUnloadEffect(SFX_SELECT);
+	mmUnloadEffect(SFX_STOP);
+	mmUnloadEffect(SFX_WRONG);
+	mmUnloadEffect(SFX_BACK);
+	mmUnloadEffect(SFX_SWITCH);
+	mmUnloadEffect(SFX_STARTUP);
+	// mmUnloadEffect(SFX_MENU);
+
+	delete[] SFX_DATA;
+}
+
+mm_sfxhand SoundControl::playLaunch(u8 panning)  { if (!sfxDataLoaded) return (mm_sfxhand)NULL; snd_launch.panning = panning;  return mmEffectEx(&snd_launch); }
+mm_sfxhand SoundControl::playSelect(u8 panning)  { if (!sfxDataLoaded) return (mm_sfxhand)NULL; snd_select.panning = panning;  return mmEffectEx(&snd_select); }
+mm_sfxhand SoundControl::playBack(u8 panning)    { if (!sfxDataLoaded) return (mm_sfxhand)NULL; snd_back.panning = panning;    return mmEffectEx(&snd_back); }
+mm_sfxhand SoundControl::playSwitch(u8 panning)  { if (!sfxDataLoaded) return (mm_sfxhand)NULL; snd_switch.panning = panning;  return mmEffectEx(&snd_switch); }
+mm_sfxhand SoundControl::playStartup(u8 panning) { if (!sfxDataLoaded) return (mm_sfxhand)NULL; mus_startup.panning = panning; return mmEffectEx(&mus_startup); }
+mm_sfxhand SoundControl::playStop(u8 panning)    { if (!sfxDataLoaded) return (mm_sfxhand)NULL; snd_stop.panning = panning;    return mmEffectEx(&snd_stop); }
+mm_sfxhand SoundControl::playWrong(u8 panning)   { if (!sfxDataLoaded) return (mm_sfxhand)NULL; snd_wrong.panning = panning;   return mmEffectEx(&snd_wrong); }
 
 void SoundControl::beginStream() {
-	if (!stream_source) return;
+	if (!stream_source || stream_is_playing) return;
 
 	// open the stream
 	stream_is_playing = true;
@@ -364,10 +511,19 @@ void SoundControl::beginStream() {
 }
 
 void SoundControl::stopStream() {
-	if (!stream_source) return;
+	if (!stream_source || !stream_is_playing) return;
 
 	stream_is_playing = false;
 	mmStreamClose();
+}
+
+void SoundControl::unloadStream() {
+	if (!stream_source || !stream_is_playing) return;
+
+	stream_is_playing = false;
+	mmStreamClose();
+	stream_source = NULL;
+	free_streaming_buf();
 }
 
 void SoundControl::fadeOutStream() {

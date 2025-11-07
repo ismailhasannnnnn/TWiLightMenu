@@ -29,22 +29,25 @@
 ---------------------------------------------------------------------------------*/
 #include <nds.h>
 #include <maxmod7.h>
+#include "common/isPhatCheck.h"
 #include "common/arm7status.h"
 
 void my_touchInit();
 void my_installSystemFIFO(void);
 
+u8 my_i2cReadRegister(u8 device, u8 reg);
+
 #define BIT_SET(c, n) ((c) << (n))
 
-#define SNDEXCNT (*(vu16*)0x4004700)
 #define SD_IRQ_STATUS (*(vu32*)0x400481C)
 
-volatile int status = 0;
+volatile u32 status = 0;
+static bool i2cBricked = false;
 
 //---------------------------------------------------------------------------------
 void ReturntoDSiMenu() {
 //---------------------------------------------------------------------------------
-	if (isDSiMode()) {
+	if (isDSiMode() && !i2cBricked) {
 		i2cWriteRegister(0x4A, 0x70, 0x01);		// Bootflag = Warmboot/SkipHealthSafety
 		i2cWriteRegister(0x4A, 0x11, 0x01);		// Reset to DSi Menu
 	} else {
@@ -83,6 +86,8 @@ int main() {
 	*(u16*)0x02FFFC36 = *(u16*)0x0800015E;	// Header CRC16
 	*(u32*)0x02FFFC38 = *(u32*)0x0800000C;	// Game Code
 
+	*(u32*)0x02FFFDF0 = REG_SCFG_EXT;
+
 	// clear sound registers
 	dmaFillWords(0, (void*)0x04000400, 0x100);
 
@@ -113,25 +118,34 @@ int main() {
 
 	irqEnable(IRQ_VBLANK | IRQ_VCOUNT);
 
-	setPowerButtonCB(powerButtonCB);
+	if (isDSiMode() || REG_SCFG_EXT != 0) {
+		const u8 i2cVer = my_i2cReadRegister(0x4A, 0);
+		i2cBricked = (i2cVer == 0 || i2cVer == 0xFF);
+	}
 
-	u8 readCommand = readPowerManagement(4);
+	u8 pmBacklight = readPowerManagement(PM_BACKLIGHT_LEVEL);
 
 	// 01: Fade Out
 	// 02: Return
-	// 03: status (Bit 0: isDSLite, Bit 1: scfgEnabled, Bit 2: sndExcnt)
-	
+	// 03: status (Bit 0: hasRegulableBacklight, Bit 1: scfgSdmmcEnabled, Bit 2: REG_SNDEXTCNT, Bit 3: isDSPhat, Bit 4: i2cBricked)
+
 
 	// 03: Status: Init/Volume/Battery/SD
 	// https://problemkaputt.de/gbatek.htm#dsii2cdevice4ahbptwlchip
 	// Battery is 7 bits -- bits 0-7
 	// Volume is 00h to 1Fh = 5 bits -- bits 8-12
 	// SD status -- bits 13-14
-	// Init status -- bits 15-17 (Bit 0 (15): isDSLite, Bit 1 (16): scfgEnabled, Bit 2 (17): sndExcnt)
+	// Init status -- bits 15-18 (Bit 0 (15): hasRegulableBacklight, Bit 1 (16): scfgSdmmcEnabled, Bit 2 (17): REG_SNDEXTCNT, Bit 3 (18): isDSPhat, Bit 4 (19): i2cBricked)
 
-	u8 initStatus = (BIT_SET(!!(SNDEXCNT), SNDEXCNT_BIT) 
-									| BIT_SET(!!(REG_SCFG_EXT), REGSCFG_BIT) 
-									| BIT_SET(!!(readCommand & BIT(4) || readCommand & BIT(5) || readCommand & BIT(6) || readCommand & BIT(7)), DSLITE_BIT));
+	*(vu32*)0x4004820 = 0x8B7F0305;
+
+	u8 initStatus = (BIT_SET(!!(REG_SNDEXTCNT), SNDEXTCNT_BIT)
+									| BIT_SET(*(vu32*)0x4004820, SCFGSDMMC_BIT)
+									| BIT_SET(!!(pmBacklight & BIT(4) || pmBacklight & BIT(5) || pmBacklight & BIT(6) || pmBacklight & BIT(7)), BACKLIGHT_BIT)
+									| BIT_SET(isPhat(), DSPHAT_BIT)
+									| BIT_SET(i2cBricked, I2CBRICKED_BIT));
+
+	*(vu32*)0x4004820 = 0;
 
 	status = (status & ~INIT_MASK) | ((initStatus << INIT_OFF) & INIT_MASK);
 	fifoSendValue32(FIFO_USER_03, status);
@@ -141,7 +155,7 @@ int main() {
 		if ((REG_KEYINPUT & (KEY_SELECT | KEY_START | KEY_L | KEY_R)) == 0) {
 			exitflag = true;
 		}
-		/*if (isDSiMode()) {
+		if (isDSiMode()) {
 			if (SD_IRQ_STATUS & BIT(4)) {
 				status = (status & ~SD_MASK) | ((2 << SD_OFF) & SD_MASK);
 				fifoSendValue32(FIFO_USER_03, status);
@@ -149,7 +163,7 @@ int main() {
 				status = (status & ~SD_MASK) | ((1 << SD_OFF) & SD_MASK);
 				fifoSendValue32(FIFO_USER_03, status);
 			}
-		}*/
+		}
 		if (fifoCheckValue32(FIFO_USER_02)) {
 			ReturntoDSiMenu();
 		}

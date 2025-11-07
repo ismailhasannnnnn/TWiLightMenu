@@ -47,13 +47,12 @@ Helpful information:
 #undef ARM9
 #define ARM7
 #include <nds/arm7/audio.h>
+#include "dmaTwl.h"
 #include "sdmmc.h"
 #include "fat.h"
 #include "dldi_patcher.h"
 #include "card.h"
 #include "boot.h"
-
-void arm7clearRAM();
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // Important things
@@ -159,6 +158,25 @@ void passArgs_ARM7 (void) {
 
 
 
+static void initMBK_dsiMode(void) {
+	// This function has no effect with ARM7 SCFG locked
+	*(vu32*)REG_MBK1 = *(u32*)0x02FFE180;
+	*(vu32*)REG_MBK2 = *(u32*)0x02FFE184;
+	*(vu32*)REG_MBK3 = *(u32*)0x02FFE188;
+	*(vu32*)REG_MBK4 = *(u32*)0x02FFE18C;
+	*(vu32*)REG_MBK5 = *(u32*)0x02FFE190;
+	REG_MBK6 = *(u32*)0x02FFE1A0;
+	REG_MBK7 = *(u32*)0x02FFE1A4;
+	REG_MBK8 = *(u32*)0x02FFE1A8;
+	REG_MBK9 = *(u32*)0x02FFE1AC;
+}
+
+void memset_addrs_arm7(u32 start, u32 end)
+{
+	// toncset((u32*)start, 0, ((int)end - (int)start));
+	dma_twlFill32(0, 0, (u32*)start, ((int)end - (int)start));
+}
+
 /*-------------------------------------------------------------------------
 resetMemory_ARM7
 Clears all of the NDS's RAM that is visible to the ARM7
@@ -205,12 +223,15 @@ void resetMemory_ARM7 (void)
 	REG_IPC_FIFO_CR = IPC_FIFO_ENABLE | IPC_FIFO_SEND_CLEAR;
 	REG_IPC_FIFO_CR = 0;
 
-	arm7clearRAM();
+	memset_addrs_arm7(0x03800000 - 0x8000, 0x03800000 + 0xC000); // clear exclusive IWRAM
+	memset_addrs_arm7(0x02004000, 0x03000000 - 0xC000);	// clear part of EWRAM - except before bootstub
 
 	REG_IE = 0;
 	REG_IF = ~0;
-	(*(vu32*)(0x04000000-4)) = 0;  //IRQ_HANDLER ARM7 version
-	(*(vu32*)(0x04000000-8)) = ~0; //VBLANK_INTR_WAIT_FLAGS, ARM7 version
+	REG_AUXIE = 0;
+	REG_AUXIF = ~0;
+	*(vu32*)0x0380FFFC = 0;  // IRQ_HANDLER ARM7 version
+	*(vu32*)0x0380FFF8 = 0; // VBLANK_INTR_WAIT_FLAGS, ARM7 version
 	REG_POWERCNT = 1;  //turn off power to stuff
 
 	// Get settings location
@@ -274,6 +295,8 @@ void loadBinary_ARM7 (u32 fileCluster)
 			fileRead(ARM9i_DST, fileCluster, ARM9i_SRC, ARM9i_LEN);
 		if (ARM7i_LEN)
 			fileRead(ARM7i_DST, fileCluster, ARM7i_SRC, ARM7i_LEN);
+
+		initMBK_dsiMode();
 	}
 }
 

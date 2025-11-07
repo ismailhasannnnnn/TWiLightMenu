@@ -1,4 +1,4 @@
-project_id_env: TWILIGHT_CROWDIN_ID
+project_id: 407378
 api_token_env: CROWDIN_TOKEN
 preserve_hierarchy: true
 
@@ -7,8 +7,6 @@ files:
     translation: /manual/nitrofiles/languages/%two_letters_code%/%original_file_name%
   - source: /quickmenu/nitrofiles/languages/en/*
     translation: /quickmenu/nitrofiles/languages/%two_letters_code%/%original_file_name%
-  - source: /romsel_aktheme/nitrofiles/language/lang_en/language.ini
-    translation: /romsel_aktheme/nitrofiles/language/lang_%two_letters_code%/language.ini
   - source: /romsel_dsimenutheme/nitrofiles/languages/en/*
     translation: /romsel_dsimenutheme/nitrofiles/languages/%two_letters_code%/%original_file_name%
   - source: /settings/nitrofiles/languages/en/*

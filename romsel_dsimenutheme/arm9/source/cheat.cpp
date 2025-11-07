@@ -35,10 +35,12 @@
 #include "errorScreen.h"
 #include "language.h"
 #include "common/tonccpy.h"
-
+#include "fileBrowse.h"
+#include "myDSiMode.h"
 
 extern bool dbox_showIcon;
 
+extern void updateBoxArt(void);
 extern void bgOperations(bool waitFrame);
 
 CheatCodelist::~CheatCodelist(void) {}
@@ -69,11 +71,8 @@ bool CheatCodelist::parse(const std::string& aFileName)
   if (romData(aFileName,gamecode,romcrc32))
   {
     const char* usrcheatPath = sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/extras/usrcheat.dat" : "fat:/_nds/TWiLightMenu/extras/usrcheat.dat";
-    loadPerGameSettings(aFileName.substr(aFileName.find_last_of('/') + 1));
-	if (ms().secondaryDevice && !(perGameSettings_useBootstrap == -1 ? ms().useBootstrap : perGameSettings_useBootstrap)) {
-		if ((memcmp(io_dldi_data->friendlyName, "R4(DS) - Revolution for DS", 26) == 0)
-		 || (memcmp(io_dldi_data->friendlyName, "R4TF", 4) == 0)
-		 || (memcmp(io_dldi_data->friendlyName, "R4iDSN", 6) == 0)
+	if (ms().secondaryDevice && !(perGameSettings_useBootstrapCheat == -1 ? ms().useBootstrap : perGameSettings_useBootstrapCheat) && ms().kernelUseable) {
+		if ((memcmp(io_dldi_data->friendlyName, "R4iDSN", 6) == 0)
 	   || (memcmp(io_dldi_data->friendlyName, "R4iTT", 5) == 0)
      || (memcmp(io_dldi_data->friendlyName, "Acekard AK2", 0xB) == 0)
      || (memcmp(io_dldi_data->friendlyName, "Ace3DS+", 7) == 0)) {
@@ -313,7 +312,7 @@ void CheatCodelist::selectCheats(std::string filename)
   printLarge(false, 0, 30, STR_CHEATS, Alignment::center, FontPalette::dialog);
   printSmall(false, 0, 100, STR_LOADING, Alignment::center, FontPalette::dialog);
   updateText(false);
-  
+
   parse(filename);
 
   bool cheatsFound = true;
@@ -330,6 +329,7 @@ void CheatCodelist::selectCheats(std::string filename)
     while (1) {
       scanKeys();
       pressed = keysDownRepeat();
+	  updateBoxArt();
       bgOperations(true);
       if (pressed & KEY_B) {
         snd().playBack();
@@ -351,6 +351,7 @@ void CheatCodelist::selectCheats(std::string filename)
       cheatWnd_scrollPosition = 0, cheatWnd_scrollTimer = 0,
       cheatWnd_scrollDirection = 1;
 
+  bool unsavedChanges = false;
   while (cheatsFound) {
     // Scroll screen if needed
     if (cheatWnd_cursorPosition < cheatWnd_screenPosition) {
@@ -385,6 +386,7 @@ void CheatCodelist::selectCheats(std::string filename)
           updateText(false);
         }
       }
+	    updateBoxArt();
       bgOperations(true);
     } while (!pressed && !held);
 
@@ -436,6 +438,8 @@ void CheatCodelist::selectCheats(std::string filename)
           deselectFolder(std::distance(&_data[0], currentList[cheatWnd_cursorPosition]));
         if (select || !(cheat._flags & cParsedItem::EOne))
           cheat._flags ^= cParsedItem::ESelected;
+
+        unsavedChanges = true;
       }
     } else if (pressed & KEY_B) {
       snd().playBack();
@@ -452,26 +456,66 @@ void CheatCodelist::selectCheats(std::string filename)
         cheatWnd_scrollTimer = 60;
         cheatWnd_scrollPosition = 0;
       } else {
-        break;
+        clearText();
+
+        if (unsavedChanges)
+        {
+          bool break2 = false;
+          printLarge(false, 0, 30, STR_CHEATS, Alignment::center, FontPalette::dialog);
+
+          std::string str = STR_CHEATS_DISCARD_CHANGES;
+          printSmall(false, 0, (SCREEN_HEIGHT>>1) - ((calcSmallFontHeight(str) - smallFontHeight()) / 2), str, Alignment::center);
+          printSmall(false, 0, 160, STR_CHEATS_DISCARD_BUTTONS, Alignment::center);
+          updateText(false);
+
+          while (1)
+          {
+            scanKeys();
+            pressed = keysDown();
+            held = keysDownRepeat();
+
+            if (pressed & KEY_B) // No
+            {
+              snd().playWrong();
+              break;
+            }
+
+            if (pressed & KEY_A) // Yes
+            {
+              snd().playBack();
+              break2 = true;
+              break;
+            }
+
+            updateBoxArt();
+            bgOperations(true);
+          }
+
+          if (break2)
+            break;
+        }
+        else
+          break;
       }
     } else if (pressed & KEY_X) {
       snd().playLaunch();
+      unsavedChanges = false;
       clearText();
       printLarge(false, 0, 30, STR_CHEATS, Alignment::center, FontPalette::dialog);
       printSmall(false, 0, 100, STR_SAVING, Alignment::center, FontPalette::dialog);
-	  updateText(false);
+	    updateText(false);
       onGenerate();
       break;
     } else if (pressed & KEY_Y) {
       if (currentList[cheatWnd_cursorPosition]->_comment != "") {
         (ms().theme == TWLSettings::EThemeSaturn) ? snd().playLaunch() : snd().playSelect();
         clearText();
-        printLarge(false, 0, 30, STR_CHEATS, Alignment::center, FontPalette::dialog);
 
         std::string _topText = "";
         std::string _topTextStr(currentList[cheatWnd_cursorPosition]->_comment);
         std::vector<std::string> words;
         std::size_t pos;
+		int lines = 1;
 
         // Process comment to stay within the box
         while ((pos = _topTextStr.find(' ')) != std::string::npos) {
@@ -491,6 +535,7 @@ void CheatCodelist::selectCheats(std::string filename)
               word.insert((float)((i + 1) * word.length()) / ((width/240) + 1), "\n");
             }
             _topText += word + '\n';
+			lines++;
             continue;
           }
 
@@ -498,25 +543,38 @@ void CheatCodelist::selectCheats(std::string filename)
           if (width > 240) {
             _topText += temp + '\n';
             temp = word;
+			lines++;
           } else {
             temp += " " + word;
           }
         }
         if (temp.size())
           _topText += temp;
-        
-        // Print comment
-        printSmall(false, 0, 60, _topText, Alignment::center, FontPalette::dialog);
 
-        // Print 'Back' text
-        printSmall(false, 0, 160, STR_B_BACK, Alignment::center, FontPalette::dialog);
+		if (lines > 6) {
+			dbox_showIcon = false;
+
+			// Print comment
+			printSmall(false, 0, 16, _topText, Alignment::center, FontPalette::dialog);
+		} else {
+			printLarge(false, 0, 30, STR_CHEATS, Alignment::center, FontPalette::dialog);
+
+			// Print comment
+			printSmall(false, 0, 60, _topText, Alignment::center, FontPalette::dialog);
+		}
+		if (lines < 10) {
+			// Print 'Back' text
+			printSmall(false, 0, 160, STR_B_BACK, Alignment::center, FontPalette::dialog);
+		}
 
         updateText(false);
         while (1) {
           scanKeys();
           pressed = keysDown();
+		      updateBoxArt();
           bgOperations(true);
           if (pressed & KEY_B) {
+			  dbox_showIcon = true;
             snd().playBack();
             break;
           }
@@ -531,6 +589,7 @@ void CheatCodelist::selectCheats(std::string filename)
       for (auto itr = currentList.begin(); itr != currentList.end(); itr++) {
         (*itr)->_flags &= ~cParsedItem::ESelected;
       }
+      unsavedChanges = true;
     }
   }
 }
@@ -552,7 +611,7 @@ static void updateDB(u8 value,u32 offset,FILE* db)
 void CheatCodelist::onGenerate(void)
 {
     const char* usrcheatPath = sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/extras/usrcheat.dat" : "fat:/_nds/TWiLightMenu/extras/usrcheat.dat";
-	if (ms().secondaryDevice && !(perGameSettings_useBootstrap == -1 ? ms().useBootstrap : perGameSettings_useBootstrap)) {
+	if (ms().secondaryDevice && !(perGameSettings_useBootstrapCheat == -1 ? ms().useBootstrap : perGameSettings_useBootstrapCheat)) {
 		if ((memcmp(io_dldi_data->friendlyName, "R4(DS) - Revolution for DS", 26) == 0)
 		 || (memcmp(io_dldi_data->friendlyName, "R4TF", 4) == 0)
 		 || (memcmp(io_dldi_data->friendlyName, "R4iDSN", 6) == 0)

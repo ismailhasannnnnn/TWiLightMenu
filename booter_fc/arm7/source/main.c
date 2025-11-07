@@ -30,8 +30,8 @@
 #include <nds.h>
 
 void my_installSystemFIFO(void);
-
-#define SNDEXCNT (*(vu16*)0x4004700)
+u8 my_cdcReadReg(u8 bank, u8 reg);
+void my_cdcWriteReg(u8 bank, u8 reg, u8 value);
 
 //---------------------------------------------------------------------------------
 void ReturntoDSiMenu() {
@@ -69,14 +69,22 @@ void powerButtonCB() {
 //---------------------------------------------------------------------------------
 int main() {
 //---------------------------------------------------------------------------------
-	REG_SCFG_ROM = 0x101;
-	REG_SCFG_CLK = (BIT(0) | BIT(1) | BIT(2) | BIT(7) | BIT(8));
-	REG_SCFG_EXT = 0x93FFFB06;
+	{
+		REG_SCFG_ROM = 0x101;
+		REG_SCFG_CLK = (BIT(0) | BIT(1) | BIT(2) | BIT(7) | BIT(8));
+		const bool sdAccess = (REG_SCFG_EXT & BIT(18));
+		REG_SCFG_EXT = 0x93FFFB06;
+		if (!sdAccess) {
+			REG_SCFG_EXT &= ~BIT(18);
+		}
+	}
 	*(vu16*)(0x04004012) = 0x1988;
 	*(vu16*)(0x04004014) = 0x264C;
 	*(vu16*)(0x04004C02) = 0x4000;	// enable powerbutton irq (Fix for Unlaunch 1.3)
 
-	*(vu16*)(0x04004700) |= BIT(13);	// Set 48khz sound/mic frequency (DSi/3DS only)
+	if ((REG_SNDEXTCNT & SNDEXTCNT_ENABLE) && !(REG_SNDEXTCNT & BIT(13))) {
+		*(vu16*)0x04004700 |= BIT(13);	// Set 48khz sound/mic frequency
+	}
 
 	// clear sound registers
 	dmaFillWords(0, (void*)0x04000400, 0x100);
@@ -106,7 +114,7 @@ int main() {
 	setPowerButtonCB(powerButtonCB);
 
 	bool isRegularDS = true; 
-	if (SNDEXCNT != 0) isRegularDS = false; // If sound frequency setting is found, then the console is not a DS Phat/Lite
+	if (REG_SNDEXTCNT != 0) isRegularDS = false; // If sound frequency setting is found, then the console is not a DS Phat/Lite
 	fifoSendValue32(FIFO_USER_07, isRegularDS);
 	// Keep the ARM7 mostly idle
 	while (!exitflag) {

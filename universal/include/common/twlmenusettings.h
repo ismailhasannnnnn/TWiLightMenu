@@ -10,7 +10,7 @@
 #define _DSIMENUPPSETTINGS_H_
 
 /**
- * Multi use class for DSiMenuPlusPlus INI file.
+ * Multi use class for TWiLight Menu++ INI file.
  * 
  * Try not to change settings that are not related to the current theme.
  */
@@ -26,22 +26,12 @@ public:
 	// 	EScrollSlow = 16
 	// };
 
-	// enum TViewMode : int
-	// {
-	// 	EViewList = 0,
-	// 	EViewIcon = 1,
-	// 	EViewInternal = 2
-	// };
-
-	enum TFlashCard : int
+	enum TViewMode : int
 	{
-		EDSTTClone = 0,     // DSTT/R4i Gold/R4i-SDHC/R4 SDHC Dual-Core/R4 SDHC Upgrade/SC DSONE
-		ER4Original = 1,    // R4DS (Original Non-SDHC version)/ M3 Simply
-		ER4iGoldClone = 2,  // R4iDSN/R4i Gold RTS/R4 Ultra
-		EAcekard2i = 3,     // Acekard 2(i)/Galaxy Eagle/M3DS Real
-		EAcekardRPG = 4,    // Acekard RPG
-		EGatewayBlue = 5,   // Ace 3DS+/Gateway Blue Card/R4iTT
-		ESupercardDSTWO = 6 // SuperCard DSTWO
+		EViewList = 0,
+		EViewIcon = 1,
+		EViewInternal = 2,
+		EViewSmallIcon = 3
 	};
 
 	// Do not reorder these, just add to the end
@@ -78,6 +68,10 @@ public:
 		ELangValencian = 27,
 		ELangCatalan = 28,
 		ELangRyukyuan = 29,
+		ELangCzech = 30,
+		ELangFinnish = 31,
+		ELangKazakh = 32,
+		ELangGalician = 33,
 	};
 
 	enum TRegion : int
@@ -135,11 +129,12 @@ public:
 		ENitroSwanLaunch = 19,
 		ENGPDSLaunch = 20,
 		ESNEmulDSLaunch = 21,
-		EAmEDSLaunch = 22,
-		ECrocoDSLaunch = 23,
+		ESugarDSLaunch = 22,
+		ESugarDSLaunch2 = 23, // Duplicated, as two CPC emulators we're bundled prior to including SugarDS
 		ETunaViDSLaunch = 24,
 		EImageLaunch = 25,
-		E3DSLaunch = 26
+		E3DSLaunch = 26,
+		EPokeMiniLaunch = 27
 	};
 
 	enum TConsoleModel : int
@@ -179,7 +174,7 @@ public:
 		EMusicRegular = 1,
 		EMusicShop = 2,
 		EMusicTheme = 3,
-		EMusicClassic = 4,
+		EMusicRegular3D = 4,
 		EMusicHBL = 5
 	};
 
@@ -200,19 +195,13 @@ public:
 	enum TGbaBooter : int
 	{
 		EGbaNativeGbar2 = 1,
-		EGbaGbar2 = 2,
+		EGbaGbar2 = 2
 	};
 
 	enum TColSegaEmulator : int
 	{
 		EColSegaS8DS = 1,
-		EColSegaColecoDS = 2,
-	};
-
-	enum TCpcEmulator : int
-	{
-		ECpcAmEDS = 1,
-		ECpcCrocoDS = 2,
+		EColSegaColecoDS = 2
 	};
 
 	enum TMegaDriveEmulator : int
@@ -237,6 +226,19 @@ public:
 		EFreq47KHz = true
 	};
 
+	enum TSaveLoc : int
+	{
+		ESavesFolder = 0,
+		EGamesFolder = 1,
+		ETWLMFolder = 2
+	};
+
+	enum TSaveRelocation : bool
+	{
+		ERelocOnSDCard = true,
+		ELocaOnNDSCart = false
+	};
+
 public:
 	TWLSettings();
 	~TWLSettings() {};
@@ -259,9 +261,13 @@ public:
 	const char* getAppName();
 public:
 	std::string romfolder[2];
+	std::string defaultRomfolder[2];
 	std::string romPath[2];
+
+	bool cursorAlwaysAtStart;
 	int pagenum[2];
 	int cursorPosition[2];
+	int saveCursorPosition[2];
 
 	TConsoleModel consoleModel;
 	bool languageSet;
@@ -270,10 +276,7 @@ public:
 	bool logging;
 	TLanguage guiLanguage, currentLanguage;
 	TLanguage titleLanguage;
-	int fps;
 	bool macroMode;
-	int colorMode;
-	// int blfLevel;
 	bool sleepMode;
 	bool kioskMode;
 	TExploit dsiWareExploit;
@@ -285,22 +288,26 @@ public:
 	bool gbar2DldiAccess;
 	bool showMainMenu;
 	bool showSelectMenu;
+	bool rocketRobzLogo;
 	TTheme theme;
 	TSettingsMusic settingsMusic;
 	TDSiMusic dsiMusic;
 	bool boxArtColorDeband;
 
 	TGbaBooter gbaBooter;
+	bool gbaR3Test;
 	TColSegaEmulator colEmulator;
 	TColSegaEmulator sgEmulator;
 	TMegaDriveEmulator mdEmulator;
-	TCpcEmulator cpcEmulator;
 	//int snesEmulator;
 	bool updateRecentlyPlayedList;
 	TSortMethod sortMethod;
+	bool hideEmptyBoxes;
 	bool showDirectories;
 	bool showHidden;
+	bool showPhoto;
 	int showBoxArt;
+	int filenameDisplay;
 	bool animateDsiIcons;
 	bool showCustomIcons;
 	bool preventDeletion;
@@ -309,13 +316,14 @@ public:
 	bool secondaryAccess;
 	bool previousUsedDevice;
 	bool secondaryDevice;
-	bool fcSaveOnSd;
+	TSaveLoc saveLocation;
 	std::vector<std::string> blockedExtensions;
 
-	int flashcard;
 	TSlot1LaunchMethod slot1LaunchMethod;
 
 	int dsiSplash;
+	bool oppositeSplash;
+	bool dsiSplashEasterEggs;
 	bool dsiSplashAutoSkip;
 	int nintendoLogoColor;
 	bool showlogo;
@@ -340,7 +348,6 @@ public:
 
 	bool slot1AccessSD;
 	bool slot1SCFGUnlock;
-	bool slot1TouchMode;
 	bool ezFlashRam;
 	int limitedMode;
 	bool dontShowDSiWareInDSModeWarning;
@@ -350,15 +357,18 @@ public:
 	bool smsGgInRam;
 	bool esrbRatingScreen;
 
-	// int ak_viewMode;
+	int ak_viewMode;
 	// int ak_scrollSpeed;
-	// bool ak_zoomIcons;
-	// std::string ak_theme;
+	bool ak_zoomIcons;
+	std::string ak_theme;
 
 	bool useBootstrap;
 	bool btsrpBootloaderDirect;
 	TBootstrapFile bootstrapFile;
+	bool kernelUseable;
 
+	std::string internetBrowserPath;
+	bool internetBrowserLaunched;
 	std::string dsiWareSrlPath;
 	std::string dsiWarePubPath;
 	std::string dsiWarePrvPath;
@@ -374,9 +384,10 @@ public:
 	TLanguage gameLanguage;
 	TRegion gameRegion;
 	bool useRomRegion;
-	int extendedMemory;
+	bool boostCpuForClut;
 	bool forceSleepPatch;
 	TSoundFreq soundFreq;
+	TSaveRelocation saveRelocation;
 };
 
 typedef singleton<TWLSettings> menuSettings_s;

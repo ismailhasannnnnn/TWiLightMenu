@@ -1,7 +1,9 @@
 #include "graphics.h"
 #include <nds.h>
 
+#include "common/fileCopy.h"
 #include "common/twlmenusettings.h"
+#include "common/systemdetails.h"
 #include "common/tonccpy.h"
 #include "fontHandler.h"
 
@@ -10,6 +12,8 @@
 #include "sub_bg.h"
 #include "saturn_bg.h"
 
+extern std::string colorLutName;
+
 extern bool fadeType;
 //extern bool widescreenEffects;
 int screenBrightness = 31;
@@ -17,17 +21,22 @@ bool lcdSwapped = false;
 extern int currentTheme;
 extern bool currentMacroMode;
 
-int frameOf60fps = 60;
 int frameDelay = 0;
 bool frameDelayEven = true; // For 24FPS
-bool renderFrame = true;
+u16* colorTable = NULL;
 
 bool screenFadedIn(void) { return (screenBrightness == 0); }
-
 bool screenFadedOut(void) { return (screenBrightness > 24); }
+
+bool invertedColors = false;
+bool noWhiteFade = false;
 
 // Ported from PAlib (obsolete)
 void SetBrightness(u8 screen, s8 bright) {
+	if ((invertedColors && bright != 0) || (noWhiteFade && bright > 0)) {
+		bright -= bright*2; // Invert brightness to match the inverted colors
+	}
+
 	u16 mode = 1 << 14;
 
 	if (bright < 0) {
@@ -35,57 +44,10 @@ void SetBrightness(u8 screen, s8 bright) {
 		bright = -bright;
 	}
 	if (bright > 31) bright = 31;
-	*(u16*)(0x0400006C + (0x1000 * screen)) = bright + mode;
+	*(vu16*)(0x0400006C + (0x1000 * screen)) = bright + mode;
 }
 
-void frameRateHandler(void) {
-	frameOf60fps++;
-	if (frameOf60fps > 60) frameOf60fps = 1;
-
-	if (!renderFrame) {
-		frameDelay++;
-		switch (ms().fps) {
-			case 11:
-				renderFrame = (frameDelay == 5+frameDelayEven);
-				break;
-			case 24:
-			//case 25:
-				renderFrame = (frameDelay == 2+frameDelayEven);
-				break;
-			case 48:
-				renderFrame = (frameOf60fps != 3
-							&& frameOf60fps != 8
-							&& frameOf60fps != 13
-							&& frameOf60fps != 18
-							&& frameOf60fps != 23
-							&& frameOf60fps != 28
-							&& frameOf60fps != 33
-							&& frameOf60fps != 38
-							&& frameOf60fps != 43
-							&& frameOf60fps != 48
-							&& frameOf60fps != 53
-							&& frameOf60fps != 58);
-				break;
-			case 50:
-				renderFrame = (frameOf60fps != 3
-							&& frameOf60fps != 9
-							&& frameOf60fps != 16
-							&& frameOf60fps != 22
-							&& frameOf60fps != 28
-							&& frameOf60fps != 34
-							&& frameOf60fps != 40
-							&& frameOf60fps != 46
-							&& frameOf60fps != 51
-							&& frameOf60fps != 58);
-				break;
-			default:
-				renderFrame = (frameDelay == 60/ms().fps);
-				break;
-		}
-	}
-}
-
-u16 convertVramColorToGrayscale(u16 val) {
+/* u16 convertVramColorToGrayscale(u16 val) {
 	u8 b,g,r,max,min;
 	b = ((val)>>10)&31;
 	g = ((val)>>5)&31;
@@ -100,13 +62,13 @@ u16 convertVramColorToGrayscale(u16 val) {
 	max = (max + min) / 2;
 
 	return 32768|(max<<10)|(max<<5)|(max);
-}
+} */
 
 // Copys a palette and applies filtering if enabled
 void copyPalette(u16 *dst, const u16 *src, int size) {
-	if (ms().colorMode == 1) { // Grayscale
+	if (colorTable) {
 		for (int i = 0; i < size; i++) {
-			dst[i] = convertVramColorToGrayscale(src[i]);
+			dst[i] = colorTable[src[i] % 0x8000];
 		}
 	} else {
 		tonccpy(dst, src, size);
@@ -133,35 +95,58 @@ void drawScroller(int y, int h, bool onLeft) {
 
 void vBlankHandler()
 {
-	if (fadeType == true) {
+	if (fadeType) {
 		screenBrightness--;
 		if (screenBrightness < 0) screenBrightness = 0;
 	} else {
 		screenBrightness++;
 		if (screenBrightness > 31) screenBrightness = 31;
 	}
-	if (renderFrame) {
-		if (currentMacroMode) {
-			SetBrightness(0, lcdSwapped ? (currentTheme == 4 ? -screenBrightness : screenBrightness) : (currentTheme == 4 ? -31 : 31));
-			SetBrightness(1, !lcdSwapped ? (currentTheme == 4 ? -screenBrightness : screenBrightness) : (currentTheme == 4 ? -31 : 31));
-		} else {
-			SetBrightness(0, currentTheme == 4 ? -screenBrightness : screenBrightness);
-			SetBrightness(1, currentTheme == 4 ? -screenBrightness : screenBrightness);
-		}
-	}
-
-	updateText(false);
-	updateText(true);
-
-	if (renderFrame) {
-		frameDelay = 0;
-		frameDelayEven = !frameDelayEven;
-		renderFrame = false;
+	if (currentMacroMode) {
+		SetBrightness(0, lcdSwapped ? (currentTheme == 4 ? -screenBrightness : screenBrightness) : (currentTheme == 4 ? -31 : 31));
+		SetBrightness(1, !lcdSwapped ? (currentTheme == 4 ? -screenBrightness : screenBrightness) : (currentTheme == 4 ? -31 : 31));
+	} else {
+		SetBrightness(0, currentTheme == 4 ? -screenBrightness : screenBrightness);
+		SetBrightness(1, currentTheme == 4 ? -screenBrightness : screenBrightness);
 	}
 }
 
 void graphicsInit() {
 	currentTheme = ms().theme;
+
+	char currentSettingPath[40];
+	sprintf(currentSettingPath, "%s:/_nds/colorLut/currentSetting.txt", (sys().isRunFromSD() ? "sd" : "fat"));
+
+	if (access(currentSettingPath, F_OK) == 0) {
+		// Load color LUT
+		char lutName[128] = {0};
+		FILE* file = fopen(currentSettingPath, "rb");
+		fread(lutName, 1, 128, file);
+		fclose(file);
+
+		char colorTablePath[256];
+		sprintf(colorTablePath, "%s:/_nds/colorLut/%s.lut", (sys().isRunFromSD() ? "sd" : "fat"), lutName);
+
+		if (getFileSize(colorTablePath) == 0x10000) {
+			colorTable = new u16[0x10000/sizeof(u16)];
+
+			FILE* file = fopen(colorTablePath, "rb");
+			fread(colorTable, 1, 0x10000, file);
+			fclose(file);
+
+			const u16 color0 = colorTable[0] | BIT(15);
+			const u16 color7FFF = colorTable[0x7FFF] | BIT(15);
+
+			invertedColors =
+			  (color0 >= 0xF000 && color0 <= 0xFFFF
+			&& color7FFF >= 0x8000 && color7FFF <= 0x8FFF);
+			if (!invertedColors) noWhiteFade = (color7FFF < 0xF000);
+
+			colorLutName = lutName;
+		}
+	} else {
+		colorLutName = "Default";
+	}
 
 	SetBrightness(0, currentTheme == 4 ? -31 : 31);
 	SetBrightness(1, currentTheme == 4 && !ms().macroMode ? -31 : 31);
@@ -201,6 +186,4 @@ void graphicsInit() {
 
 	irqSet(IRQ_VBLANK, vBlankHandler);
 	irqEnable(IRQ_VBLANK);
-	irqSet(IRQ_VCOUNT, frameRateHandler);
-	irqEnable(IRQ_VCOUNT);
 }

@@ -31,9 +31,15 @@ private:
 
 	int _shoulderLRenderY;
 	int _shoulderLRenderX;
+	int _shoulderLTextY;
+	int _shoulderLTextX;
+	int _shoulderLTextAlign;
 	
 	int _shoulderRRenderY;
 	int _shoulderRRenderX;
+	int _shoulderRTextY;
+	int _shoulderRTextX;
+	int _shoulderRTextAlign;
 
 	int _volumeRenderY;
 	int _volumeRenderX;
@@ -44,6 +50,7 @@ private:
 	int _usernameRenderY;
 	int _usernameRenderX;
 	int _usernameRenderXDS;
+	bool _usernameEdgeAlpha;
 
 	int _dateRenderY;
 	int _dateRenderX;
@@ -73,16 +80,20 @@ private:
 	bool _startTextUserPalette;
 	bool _wirelessIconsUserPalette;
 	bool _iconA26UserPalette;
+	bool _iconCPCUserPalette;
 	bool _iconCOLUserPalette;
 	bool _iconGBUserPalette;
 	bool _iconGBAUserPalette;
 	bool _iconGBAModeUserPalette;
 	bool _iconGGUserPalette;
+	bool _iconHBUserPalette;
 	bool _iconIMGUserPalette;
 	bool _iconINTUserPalette;
 	bool _iconM5UserPalette;
 	bool _iconManualUserPalette;
 	bool _iconMDUserPalette;
+	bool _iconMINIUserPalette;
+	bool _iconMSXUserPalette;
 	bool _iconNESUserPalette;
 	bool _iconNGPUserPalette;
 	bool _iconPCEUserPalette;
@@ -92,6 +103,7 @@ private:
 	bool _iconSMSUserPalette;
 	bool _iconSNESUserPalette;
 	bool _iconUnknownUserPalette;
+	bool _iconVIDUserPalette;
 	bool _iconWSUserPalette;
 	bool _usernameUserPalette;
 	bool _progressBarUserPalette;
@@ -100,6 +112,7 @@ private:
 	bool _renderPhoto;
 	bool _darkLoading;
 	bool _useAlphaBlend;
+	bool _playStopSound;
 	bool _playStartupJingle;
 	int _startupJingleDelayAdjust;
 	u16 _progressBarColor;
@@ -108,6 +121,10 @@ private:
 	u16 _fontPalette2;
 	u16 _fontPalette3;
 	u16 _fontPalette4;
+	u16 _fontPaletteDisabled1;
+	u16 _fontPaletteDisabled2;
+	u16 _fontPaletteDisabled3;
+	u16 _fontPaletteDisabled4;
 	u16 _fontPaletteTitlebox1;
 	u16 _fontPaletteTitlebox2;
 	u16 _fontPaletteTitlebox3;
@@ -155,9 +172,15 @@ public:
 
 	int shoulderLRenderY() const { return _shoulderLRenderY; }
 	int shoulderLRenderX() const { return _shoulderLRenderX; }
+	int shoulderLTextY() const { return _shoulderLTextY; }
+	int shoulderLTextX() const { return _shoulderLTextX; }
+	int shoulderLTextAlign() const { return _shoulderLTextAlign; }
 	
 	int shoulderRRenderY() const { return _shoulderRRenderY; }
 	int shoulderRRenderX() const { return _shoulderRRenderX; }
+	int shoulderRTextY() const { return _shoulderRTextY; }
+	int shoulderRTextX() const { return _shoulderRTextX; }
+	int shoulderRTextAlign() const { return _shoulderRTextAlign; }
 
 	int volumeRenderY() const { return _volumeRenderY; }
 	int volumeRenderX() const { return _volumeRenderX; }
@@ -168,6 +191,7 @@ public:
 	int usernameRenderY() const { return _usernameRenderY; }
 	int usernameRenderX() const { return _usernameRenderX; }
 	int usernameRenderXDS() const { return _usernameRenderXDS; }
+	bool usernameEdgeAlpha() const { return _usernameEdgeAlpha; }
 
 	int dateRenderY() const { return _dateRenderY; }
 	int dateRenderX() const { return _dateRenderX; }
@@ -197,16 +221,20 @@ public:
 	bool startTextUserPalette() const { return _startTextUserPalette; }
 	bool wirelessIconsUserPalette() const { return _wirelessIconsUserPalette; }
 	bool iconA26UserPalette() const { return _iconA26UserPalette; }
+	bool iconCPCUserPalette() const { return _iconCPCUserPalette; }
 	bool iconCOLUserPalette() const { return _iconCOLUserPalette; }
 	bool iconGBUserPalette() const { return _iconGBUserPalette; }
 	bool iconGBAUserPalette() const { return _iconGBAUserPalette; }
 	bool iconGBAModeUserPalette() const { return _iconGBAModeUserPalette; }
 	bool iconGGUserPalette() const { return _iconGGUserPalette; }
+	bool iconHBUserPalette() const { return _iconHBUserPalette; }
 	bool iconIMGUserPalette() const { return _iconIMGUserPalette; }
 	bool iconINTUserPalette() const { return _iconINTUserPalette; }
 	bool iconM5UserPalette() const { return _iconM5UserPalette; }
 	bool iconManualUserPalette() const { return _iconManualUserPalette; }
 	bool iconMDUserPalette() const { return _iconMDUserPalette; }
+	bool iconMINIUserPalette() const { return _iconMINIUserPalette; }
+	bool iconMSXUserPalette() const { return _iconMSXUserPalette; }
 	bool iconNESUserPalette() const { return _iconNESUserPalette; }
 	bool iconNGPUserPalette() const { return _iconNGPUserPalette; }
 	bool iconPCEUserPalette() const { return _iconPCEUserPalette; }
@@ -216,6 +244,7 @@ public:
 	bool iconSMSUserPalette() const { return _iconSMSUserPalette; }
 	bool iconSNESUserPalette() const { return _iconSNESUserPalette; }
 	bool iconUnknownUserPalette() const { return _iconUnknownUserPalette; }
+	bool iconVIDUserPalette() const { return _iconVIDUserPalette; }
 	bool iconWSUserPalette() const { return _iconWSUserPalette; }
 	bool usernameUserPalette() const { return _usernameUserPalette; }
 	bool progressBarUserPalette() const { return _progressBarUserPalette; }
@@ -225,6 +254,7 @@ public:
 	bool darkLoading() const { return _darkLoading; }
 	bool useAlphaBlend() const { return _useAlphaBlend; }
 
+	bool playStopSound() const { return _playStopSound; }
 	bool playStartupJingle() const { return _playStartupJingle; }
 	int startupJingleDelayAdjust() const { return _startupJingleDelayAdjust; }
 	u16 progressBarColor() const { return _progressBarColor; }
@@ -233,6 +263,10 @@ public:
 	u16 fontPalette2() const { return _fontPalette2; }
 	u16 fontPalette3() const { return _fontPalette3; }
 	u16 fontPalette4() const { return _fontPalette4; }
+	u16 fontPaletteDisabled1() const { return _fontPaletteDisabled1; }
+	u16 fontPaletteDisabled2() const { return _fontPaletteDisabled2; }
+	u16 fontPaletteDisabled3() const { return _fontPaletteDisabled3; }
+	u16 fontPaletteDisabled4() const { return _fontPaletteDisabled4; }
 	u16 fontPaletteTitlebox1() const { return _fontPaletteTitlebox1; }
 	u16 fontPaletteTitlebox2() const { return _fontPaletteTitlebox2; }
 	u16 fontPaletteTitlebox3() const { return _fontPaletteTitlebox3; }

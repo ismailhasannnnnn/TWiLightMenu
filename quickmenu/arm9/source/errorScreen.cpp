@@ -10,6 +10,8 @@
 #include "common/tonccpy.h"
 #include "language.h"
 
+extern u16* colorTable;
+
 extern const char *unlaunchAutoLoadID;
 extern char unlaunchDevicePath[256];
 extern void unlaunchSetHiyaBoot();
@@ -45,6 +47,11 @@ void checkSdEject(void) {
 		0xD6B5,
 		0xFFFF,
 	};
+	if (colorTable) {
+		for (int i = 0; i < 4; i++) {
+			palette[i] = colorTable[palette[i] % 0x8000];
+		}
+	}
 	tonccpy(BG_PALETTE, palette, sizeof(palette));
 	tonccpy(BG_PALETTE_SUB, palette, sizeof(palette));
 

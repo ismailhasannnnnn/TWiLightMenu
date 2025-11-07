@@ -25,8 +25,8 @@ bool cartInserted;
 
 void bootSplashDSi(void) {
 	// u16 whiteCol = ((whiteCol>>10)&0x1f) | ((whiteCol)&((31-3*ms().blfLevel)<<5)) | (whiteCol&(31-6*ms().blfLevel))<<10 | BIT(15);
-	toncset16(BG_GFX, 0xFFFF, 256*256);
-	toncset16(BG_GFX_SUB, 0xFFFF, 256*256);
+	// toncset16(BG_GFX, 0xFFFF, 256*256);
+	// toncset16(BG_GFX_SUB, 0xFFFF, 256*256);
 
 	cartInserted = (REG_SCFG_MC != 0x11);
 
@@ -41,10 +41,11 @@ void bootSplashDSi(void) {
 	const struct tm *Time = localtime(&Raw);
 
 	strftime(currentDate, sizeof(currentDate), "%m/%d", Time);
-	bool virtualPain = (strcmp(currentDate, "04/01") == 0 || (ms().getGameRegion() == 0 ? (strcmp(currentDate, "07/21") == 0) : (strcmp(currentDate, "08/14") == 0))); // If April Fools, or the release date of the Virtual Boy
-	bool super = (*(u16*)(0x020000C0) == 0x334D || *(u16*)(0x020000C0) == 0x3647 || *(u16*)(0x020000C0) == 0x4353); // Slot-2 flashcard
+	const bool virtualPain = (ms().dsiSplashEasterEggs && (strcmp(currentDate, "04/01") == 0 || strcmp(currentDate, ms().getGameRegion() == 0 ? "07/21" : "08/14") == 0)); // If April Fools, or the release date of the Virtual Boy
+	const bool super = (*(u16*)(0x020000C0) == 0x334D || *(u16*)(0x020000C0) == 0x3647 || *(u16*)(0x020000C0) == 0x4353); // Slot-2 flashcard
+	const bool regularDS = (sys().isRegularDS() && !ms().oppositeSplash) || (!sys().isRegularDS() && ms().oppositeSplash);
 
-	bool custom = ms().dsiSplash == 3;
+	const bool custom = ms().dsiSplash == 3;
 
 	char path[256];
 	if (virtualPain) {
@@ -56,14 +57,14 @@ void bootSplashDSi(void) {
 	} else if (super) {
 		sprintf(path, "nitro:/video/splash/superDS.gif");
 	} else {
-		sprintf(path, "nitro:/video/splash/%s.gif", language == TWLSettings::ELangChineseS ? "iquedsi" : (sys().isRegularDS() ? "ds" : "dsi"));
+		sprintf(path, "nitro:/video/splash/%s.gif", language == TWLSettings::ELangChineseS ? "iquedsi" : (regularDS ? "ds" : "dsi"));
 	}
 	Gif splash(path, true, true);
 
 	path[0] = '\0';
 	if (virtualPain) { // Load Virtual Pain image
 		strcpy(path, "nitro:/video/hsmsg/virtualPain.gif");
-	} else if (ms().dsiSplash == 1) { // Load Touch the Touch Screen to continue image
+	} else if (ms().dsiSplash == 1) { // Load "Touch the Touch Screen to continue" image
 		sprintf(path, "nitro:/video/tttstc/%i.gif", language);
 	} else if (ms().dsiSplash == 2) { // Load H&S image
 		sprintf(path, "nitro:/video/hsmsg/%i.gif", language);
@@ -118,8 +119,8 @@ void bootSplashDSi(void) {
 				}
 			}
 			u16 color = image[i * 4] >> 3 | (image[(i * 4) + 1] >> 3) << 5 | (image[(i * 4) + 2] >> 3) << 10 | (image[(i * 4) + 3] > 0) << 15;
-			if (ms().colorMode == 1) {
-				color = (color & 0x8000) | (convertVramColorToGrayscale(color) & 0x7FFF);
+			if (colorTable) {
+				color = (color & 0x8000) | (colorTable[color % 0x8000] & 0x7FFF);
 			}
 
 			if (x >= width) {
@@ -134,6 +135,10 @@ void bootSplashDSi(void) {
 	}
 
 	if (!custom && !virtualPain) {
+		const u16 white = colorTable ? colorTable[0x7FFF] : 0xFFFF;
+		BG_PALETTE[0] = white;
+		BG_PALETTE_SUB[0] = white;
+
 		controlBottomBright = false;
 		fadeType = false;
 		screenBrightness = 0;
@@ -153,7 +158,7 @@ void bootSplashDSi(void) {
 			//loadROMselectAsynch();
 			scanKeys();
 
-			if (!custom && splash.currentFrame() == 14)
+			if (!custom && splash.currentFrame() == 16)
 				snd().playDSiBoot();
 		}
 	} else {
@@ -181,7 +186,7 @@ void bootSplashDSi(void) {
 				}
 			}
 
-			if (!custom && splash.currentFrame() == (super ? 1 : 24))
+			if (!custom && splash.currentFrame() == (super ? 1 : 26))
 				snd().playDSiBoot();
 		}
 	}

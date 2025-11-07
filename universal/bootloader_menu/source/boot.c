@@ -49,6 +49,7 @@ Helpful information:
 #include <nds/arm7/audio.h>
 #include <nds/arm7/codec.h>
 #include <string.h> // memcmp
+#include "dmaTwl.h"
 #include "common/tonccpy.h"
 #include "sdmmc.h"
 #include "i2c.h"
@@ -56,8 +57,6 @@ Helpful information:
 #include "dldi_patcher.h"
 #include "card.h"
 #include "boot.h"
-
-void arm7clearRAM();
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // Important things
@@ -149,7 +148,7 @@ void passArgs_ARM7 (void) {
 	argDst = (u32*)((ARM9_DST + ARM9_LEN + 3) & ~3);		// Word aligned
 
 	if (ARM9_LEN > 0x380000) {
-		argDst = (u32*)0x02FFA000;
+		argDst = (u32*)(TEMP_MEM - ((argSize/4)*4));
 	} else
 	if (dsiMode && (*(u8*)(NDS_HEAD + 0x012) & BIT(1))) {
 		u32 ARM9i_DST = *((u32*)(TWL_HEAD + 0x1C8));
@@ -170,6 +169,28 @@ void passArgs_ARM7 (void) {
 
 
 
+
+static void initMBK_dsiMode(void) {
+	// This function has no effect with ARM7 SCFG locked
+	*(vu32*)REG_MBK1 = *(u32*)0x02FFE180;
+	*(vu32*)REG_MBK2 = *(u32*)0x02FFE184;
+	*(vu32*)REG_MBK3 = *(u32*)0x02FFE188;
+	*(vu32*)REG_MBK4 = *(u32*)0x02FFE18C;
+	*(vu32*)REG_MBK5 = *(u32*)0x02FFE190;
+	REG_MBK6 = *(u32*)0x02FFE1A0;
+	REG_MBK7 = *(u32*)0x02FFE1A4;
+	REG_MBK8 = *(u32*)0x02FFE1A8;
+	REG_MBK9 = *(u32*)0x02FFE1AC;
+}
+
+void memset_addrs_arm7(u32 start, u32 end)
+{
+	if (!dsiMode && !(REG_SCFG_EXT & BIT(16))) {
+		toncset((u32*)start, 0, ((int)end - (int)start));
+		return;
+	}
+	dma_twlFill32(0, 0, (u32*)start, ((int)end - (int)start));
+}
 
 /*-------------------------------------------------------------------------
 resetMemory_ARM7
@@ -217,20 +238,22 @@ void resetMemory_ARM7 (void)
 	REG_IPC_FIFO_CR = IPC_FIFO_ENABLE | IPC_FIFO_SEND_CLEAR;
 	REG_IPC_FIFO_CR = 0;
 
-	arm7clearRAM();
+	memset_addrs_arm7(0x03800000 - 0x8000, 0x03800000 + (dsiMode ? 0xC000 : 0x10000)); // clear exclusive IWRAM
 	// clear most of EWRAM - except after RAM end - 0xc000, which has the bootstub
 	if (dsiMode && loadFromRam) {
-		toncset((void*)0x02004000, 0, 0x7FC000);
-		toncset((void*)0x02D00000, 0, 0x2F4000);
+		memset_addrs_arm7(0x02004000, 0x02800000);
+		memset_addrs_arm7(0x02D00000, 0x02FF4000);
 	} else {
-		toncset((void*)0x02004000, 0, dsiMode&&!dsMode ? 0xFF0000 : 0x3F0000);
+		memset_addrs_arm7(0x02004000, dsiMode&&!dsMode ? 0x02FF4000 : 0x023F4000);
 	}
 	*(u32*)(0x2FFFD9C) = 0;	// Clear exception handler
 
 	REG_IE = 0;
 	REG_IF = ~0;
-	(*(vu32*)(0x04000000-4)) = 0;  //IRQ_HANDLER ARM7 version
-	(*(vu32*)(0x04000000-8)) = ~0; //VBLANK_INTR_WAIT_FLAGS, ARM7 version
+	REG_AUXIE = 0;
+	REG_AUXIF = ~0;
+	*(vu32*)0x0380FFFC = 0;  // IRQ_HANDLER ARM7 version
+	*(vu32*)0x0380FFF8 = 0; // VBLANK_INTR_WAIT_FLAGS, ARM7 version
 	REG_POWERCNT = 1;  //turn off power to stuff
 
 	// Get settings location
@@ -266,8 +289,6 @@ u8 dsiFlags;
 void loadBinary_ARM7 (u32 fileCluster)
 {
 	if (loadFromRam) {
-		bool isDSi = (*(vu32*)(0x08240000) != 1);
-
 		ARM9_SRC = *(u32*)(TWL_HEAD+0x20);
 		char* ARM9_DST = (char*)*(u32*)(TWL_HEAD+0x28);
 		u32 ARM9_LEN = *(u32*)(TWL_HEAD+0x2C);
@@ -277,8 +298,8 @@ void loadBinary_ARM7 (u32 fileCluster)
 
 		ROM_TID = *(u32*)(TWL_HEAD+0xC);
 
-		tonccpy(ARM9_DST, (char*)(isDSi ? 0x02800000 : 0x09000000), ARM9_LEN);
-		tonccpy(ARM7_DST, (char*)(isDSi ? 0x02B80000 : 0x09380000), ARM7_LEN);
+		tonccpy(ARM9_DST, (char*)0x02800000, ARM9_LEN);
+		tonccpy(ARM7_DST, (char*)0x02B80000, ARM7_LEN);
 
 		// first copy the header to its proper location, excluding
 		// the ARM9 start address, so as not to start it
@@ -300,10 +321,11 @@ void loadBinary_ARM7 (u32 fileCluster)
 				tonccpy(ARM9i_DST, (char*)0x02C00000, ARM9i_LEN);
 			if (ARM7i_LEN)
 				tonccpy(ARM7i_DST, (char*)0x02C80000, ARM7i_LEN);
+
+			initMBK_dsiMode();
 		}
 
-		if (isDSi)
-			toncset((void*)0x02800000, 0, 0x500000);
+		toncset((void*)0x02800000, 0, 0x500000);
 
 		return;
 	}
@@ -349,6 +371,8 @@ void loadBinary_ARM7 (u32 fileCluster)
 			fileRead(ARM9i_DST, fileCluster, ARM9i_SRC, ARM9i_LEN);
 		if (ARM7i_LEN)
 			fileRead(ARM7i_DST, fileCluster, ARM7i_SRC, ARM7i_LEN);
+
+		initMBK_dsiMode();
 	}
 }
 
@@ -369,146 +393,151 @@ static void NDSTouchscreenMode(void) {
 		volLevel = 0xA7;
 	//}
 
+	const bool noSgba = (strncmp((const char*)0x04FFFA00, "no$gba", 6) == 0);
+
 	// Touchscreen
-	cdcReadReg (0x63, 0x00);
-	cdcWriteReg(CDC_CONTROL, 0x3A, 0x00);
-	cdcReadReg (CDC_CONTROL, 0x51);
-	cdcReadReg (CDC_TOUCHCNT, 0x02);
-	cdcReadReg (CDC_CONTROL, 0x3F);
-	cdcReadReg (CDC_SOUND, 0x28);
-	cdcReadReg (CDC_SOUND, 0x2A);
-	cdcReadReg (CDC_SOUND, 0x2E);
-	cdcWriteReg(CDC_CONTROL, 0x52, 0x80);
-	cdcWriteReg(CDC_CONTROL, 0x40, 0x0C);
-	cdcWriteReg(CDC_SOUND, 0x24, 0xFF);
-	cdcWriteReg(CDC_SOUND, 0x25, 0xFF);
-	cdcWriteReg(CDC_SOUND, 0x26, 0x7F);
-	cdcWriteReg(CDC_SOUND, 0x27, 0x7F);
-	cdcWriteReg(CDC_SOUND, 0x28, 0x4A);
-	cdcWriteReg(CDC_SOUND, 0x29, 0x4A);
-	cdcWriteReg(CDC_SOUND, 0x2A, 0x10);
-	cdcWriteReg(CDC_SOUND, 0x2B, 0x10);
-	cdcWriteReg(CDC_CONTROL, 0x51, 0x00);
-	cdcReadReg (CDC_TOUCHCNT, 0x02);
-	cdcWriteReg(CDC_TOUCHCNT, 0x02, 0x98);
-	cdcWriteReg(CDC_SOUND, 0x23, 0x00);
-	cdcWriteReg(CDC_SOUND, 0x1F, 0x14);
-	cdcWriteReg(CDC_SOUND, 0x20, 0x14);
-	cdcWriteReg(CDC_CONTROL, 0x3F, 0x00);
-	cdcReadReg (CDC_CONTROL, 0x0B);
-	cdcWriteReg(CDC_CONTROL, 0x05, 0x00);
-	cdcWriteReg(CDC_CONTROL, 0x0B, 0x01);
-	cdcWriteReg(CDC_CONTROL, 0x0C, 0x02);
-	cdcWriteReg(CDC_CONTROL, 0x12, 0x01);
-	cdcWriteReg(CDC_CONTROL, 0x13, 0x02);
-	cdcWriteReg(CDC_SOUND, 0x2E, 0x00);
-	cdcWriteReg(CDC_CONTROL, 0x3A, 0x60);
-	cdcWriteReg(CDC_CONTROL, 0x01, 0x01);
-	cdcWriteReg(CDC_CONTROL, 0x39, 0x66);
-	cdcReadReg (CDC_SOUND, 0x20);
-	cdcWriteReg(CDC_SOUND, 0x20, 0x10);
-	cdcWriteReg(CDC_CONTROL, 0x04, 0x00);
-	cdcWriteReg(CDC_CONTROL, 0x12, 0x81);
-	cdcWriteReg(CDC_CONTROL, 0x13, 0x82);
-	cdcWriteReg(CDC_CONTROL, 0x51, 0x82);
-	cdcWriteReg(CDC_CONTROL, 0x51, 0x00);
-	cdcWriteReg(CDC_CONTROL, 0x04, 0x03);
-	cdcWriteReg(CDC_CONTROL, 0x05, 0xA1);
-	cdcWriteReg(CDC_CONTROL, 0x06, 0x15);
-	cdcWriteReg(CDC_CONTROL, 0x0B, 0x87);
-	cdcWriteReg(CDC_CONTROL, 0x0C, 0x83);
-	cdcWriteReg(CDC_CONTROL, 0x12, 0x87);
-	cdcWriteReg(CDC_CONTROL, 0x13, 0x83);
-	cdcReadReg (CDC_TOUCHCNT, 0x10);
-	cdcWriteReg(CDC_TOUCHCNT, 0x10, 0x08);
-	cdcWriteReg(0x04, 0x08, 0x7F);
-	cdcWriteReg(0x04, 0x09, 0xE1);
-	cdcWriteReg(0x04, 0x0A, 0x80);
-	cdcWriteReg(0x04, 0x0B, 0x1F);
-	cdcWriteReg(0x04, 0x0C, 0x7F);
-	cdcWriteReg(0x04, 0x0D, 0xC1);
-	cdcWriteReg(CDC_CONTROL, 0x41, 0x08);
-	cdcWriteReg(CDC_CONTROL, 0x42, 0x08);
-	cdcWriteReg(CDC_CONTROL, 0x3A, 0x00);
-	cdcWriteReg(0x04, 0x08, 0x7F);
-	cdcWriteReg(0x04, 0x09, 0xE1);
-	cdcWriteReg(0x04, 0x0A, 0x80);
-	cdcWriteReg(0x04, 0x0B, 0x1F);
-	cdcWriteReg(0x04, 0x0C, 0x7F);
-	cdcWriteReg(0x04, 0x0D, 0xC1);
-	cdcWriteReg(CDC_SOUND, 0x2F, 0x2B);
-	cdcWriteReg(CDC_SOUND, 0x30, 0x40);
-	cdcWriteReg(CDC_SOUND, 0x31, 0x40);
-	cdcWriteReg(CDC_SOUND, 0x32, 0x60);
-	cdcReadReg (CDC_CONTROL, 0x74);
-	cdcWriteReg(CDC_CONTROL, 0x74, 0x02);
-	cdcReadReg (CDC_CONTROL, 0x74);
-	cdcWriteReg(CDC_CONTROL, 0x74, 0x10);
-	cdcReadReg (CDC_CONTROL, 0x74);
-	cdcWriteReg(CDC_CONTROL, 0x74, 0x40);
-	cdcWriteReg(CDC_SOUND, 0x21, 0x20);
-	cdcWriteReg(CDC_SOUND, 0x22, 0xF0);
-	cdcReadReg (CDC_CONTROL, 0x51);
-	cdcReadReg (CDC_CONTROL, 0x3F);
-	cdcWriteReg(CDC_CONTROL, 0x3F, 0xD4);
-	cdcWriteReg(CDC_SOUND, 0x23, 0x44);
-	cdcWriteReg(CDC_SOUND, 0x1F, 0xD4);
-	cdcWriteReg(CDC_SOUND, 0x28, 0x4E);
-	cdcWriteReg(CDC_SOUND, 0x29, 0x4E);
-	cdcWriteReg(CDC_SOUND, 0x24, 0x9E);
-	cdcWriteReg(CDC_SOUND, 0x25, 0x9E);
-	cdcWriteReg(CDC_SOUND, 0x20, 0xD4);
-	cdcWriteReg(CDC_SOUND, 0x2A, 0x14);
-	cdcWriteReg(CDC_SOUND, 0x2B, 0x14);
-	cdcWriteReg(CDC_SOUND, 0x26, 0xA7);
-	cdcWriteReg(CDC_SOUND, 0x27, 0xA7);
-	cdcWriteReg(CDC_CONTROL, 0x40, 0x00);
-	cdcWriteReg(CDC_CONTROL, 0x3A, 0x60);
+	if (noSgba) {
+		cdcReadReg (0x63, 0x00);
+		cdcWriteReg(CDC_CONTROL, 0x3A, 0x00);
+		cdcReadReg (CDC_CONTROL, 0x51);
+		cdcReadReg (CDC_TOUCHCNT, 0x02);
+		cdcReadReg (CDC_CONTROL, 0x3F);
+		cdcReadReg (CDC_SOUND, 0x28);
+		cdcReadReg (CDC_SOUND, 0x2A);
+		cdcReadReg (CDC_SOUND, 0x2E);
+		cdcWriteReg(CDC_CONTROL, 0x52, 0x80);
+		cdcWriteReg(CDC_CONTROL, 0x40, 0x0C);
+		cdcWriteReg(CDC_SOUND, 0x24, 0xFF);
+		cdcWriteReg(CDC_SOUND, 0x25, 0xFF);
+		cdcWriteReg(CDC_SOUND, 0x26, 0x7F);
+		cdcWriteReg(CDC_SOUND, 0x27, 0x7F);
+		cdcWriteReg(CDC_SOUND, 0x28, 0x4A);
+		cdcWriteReg(CDC_SOUND, 0x29, 0x4A);
+		cdcWriteReg(CDC_SOUND, 0x2A, 0x10);
+		cdcWriteReg(CDC_SOUND, 0x2B, 0x10);
+		cdcWriteReg(CDC_CONTROL, 0x51, 0x00);
+		cdcReadReg (CDC_TOUCHCNT, 0x02);
+		cdcWriteReg(CDC_TOUCHCNT, 0x02, 0x98);
+		cdcWriteReg(CDC_SOUND, 0x23, 0x00);
+		cdcWriteReg(CDC_SOUND, 0x1F, 0x14);
+		cdcWriteReg(CDC_SOUND, 0x20, 0x14);
+		cdcWriteReg(CDC_CONTROL, 0x3F, 0x00);
+		cdcReadReg (CDC_CONTROL, 0x0B);
+		cdcWriteReg(CDC_CONTROL, 0x05, 0x00);
+		cdcWriteReg(CDC_CONTROL, 0x0B, 0x01);
+		cdcWriteReg(CDC_CONTROL, 0x0C, 0x02);
+		cdcWriteReg(CDC_CONTROL, 0x12, 0x01);
+		cdcWriteReg(CDC_CONTROL, 0x13, 0x02);
+		cdcWriteReg(CDC_SOUND, 0x2E, 0x00);
+		cdcWriteReg(CDC_CONTROL, 0x3A, 0x60);
+		cdcWriteReg(CDC_CONTROL, 0x01, 0x01);
+		cdcWriteReg(CDC_CONTROL, 0x39, 0x66);
+		cdcReadReg (CDC_SOUND, 0x20);
+		cdcWriteReg(CDC_SOUND, 0x20, 0x10);
+		cdcWriteReg(CDC_CONTROL, 0x04, 0x00);
+		cdcWriteReg(CDC_CONTROL, 0x12, 0x81);
+		cdcWriteReg(CDC_CONTROL, 0x13, 0x82);
+		cdcWriteReg(CDC_CONTROL, 0x51, 0x82);
+		cdcWriteReg(CDC_CONTROL, 0x51, 0x00);
+		cdcWriteReg(CDC_CONTROL, 0x04, 0x03);
+		cdcWriteReg(CDC_CONTROL, 0x05, 0xA1);
+		cdcWriteReg(CDC_CONTROL, 0x06, 0x15);
+		cdcWriteReg(CDC_CONTROL, 0x0B, 0x87);
+		cdcWriteReg(CDC_CONTROL, 0x0C, 0x83);
+		cdcWriteReg(CDC_CONTROL, 0x12, 0x87);
+		cdcWriteReg(CDC_CONTROL, 0x13, 0x83);
+		cdcReadReg (CDC_TOUCHCNT, 0x10);
+		cdcWriteReg(CDC_TOUCHCNT, 0x10, 0x08);
+		cdcWriteReg(0x04, 0x08, 0x7F);
+		cdcWriteReg(0x04, 0x09, 0xE1);
+		cdcWriteReg(0x04, 0x0A, 0x80);
+		cdcWriteReg(0x04, 0x0B, 0x1F);
+		cdcWriteReg(0x04, 0x0C, 0x7F);
+		cdcWriteReg(0x04, 0x0D, 0xC1);
+		cdcWriteReg(CDC_CONTROL, 0x41, 0x08);
+		cdcWriteReg(CDC_CONTROL, 0x42, 0x08);
+		cdcWriteReg(CDC_CONTROL, 0x3A, 0x00);
+		cdcWriteReg(0x04, 0x08, 0x7F);
+		cdcWriteReg(0x04, 0x09, 0xE1);
+		cdcWriteReg(0x04, 0x0A, 0x80);
+		cdcWriteReg(0x04, 0x0B, 0x1F);
+		cdcWriteReg(0x04, 0x0C, 0x7F);
+		cdcWriteReg(0x04, 0x0D, 0xC1);
+		cdcWriteReg(CDC_SOUND, 0x2F, 0x2B);
+		cdcWriteReg(CDC_SOUND, 0x30, 0x40);
+		cdcWriteReg(CDC_SOUND, 0x31, 0x40);
+		cdcWriteReg(CDC_SOUND, 0x32, 0x60);
+		cdcReadReg (CDC_CONTROL, 0x74);
+		cdcWriteReg(CDC_CONTROL, 0x74, 0x02);
+		cdcReadReg (CDC_CONTROL, 0x74);
+		cdcWriteReg(CDC_CONTROL, 0x74, 0x10);
+		cdcReadReg (CDC_CONTROL, 0x74);
+		cdcWriteReg(CDC_CONTROL, 0x74, 0x40);
+		cdcWriteReg(CDC_SOUND, 0x21, 0x20);
+		cdcWriteReg(CDC_SOUND, 0x22, 0xF0);
+		cdcReadReg (CDC_CONTROL, 0x51);
+		cdcReadReg (CDC_CONTROL, 0x3F);
+		cdcWriteReg(CDC_CONTROL, 0x3F, 0xD4);
+		cdcWriteReg(CDC_SOUND, 0x23, 0x44);
+		cdcWriteReg(CDC_SOUND, 0x1F, 0xD4);
+		cdcWriteReg(CDC_SOUND, 0x28, 0x4E);
+		cdcWriteReg(CDC_SOUND, 0x29, 0x4E);
+		cdcWriteReg(CDC_SOUND, 0x24, 0x9E);
+		cdcWriteReg(CDC_SOUND, 0x25, 0x9E);
+		cdcWriteReg(CDC_SOUND, 0x20, 0xD4);
+		cdcWriteReg(CDC_SOUND, 0x2A, 0x14);
+		cdcWriteReg(CDC_SOUND, 0x2B, 0x14);
+		cdcWriteReg(CDC_SOUND, 0x26, 0xA7);
+		cdcWriteReg(CDC_SOUND, 0x27, 0xA7);
+		cdcWriteReg(CDC_CONTROL, 0x40, 0x00);
+		cdcWriteReg(CDC_CONTROL, 0x3A, 0x60);
+	}
 	cdcWriteReg(CDC_SOUND, 0x26, volLevel);
 	cdcWriteReg(CDC_SOUND, 0x27, volLevel);
 	cdcWriteReg(CDC_SOUND, 0x2E, 0x03);
 	cdcWriteReg(CDC_TOUCHCNT, 0x03, 0x00);
 	cdcWriteReg(CDC_SOUND, 0x21, 0x20);
 	cdcWriteReg(CDC_SOUND, 0x22, 0xF0);
-	cdcReadReg (CDC_SOUND, 0x22);
-	cdcWriteReg(CDC_SOUND, 0x22, 0x00);
+	cdcWriteReg(CDC_SOUND, 0x22, 0x70);
 	cdcWriteReg(CDC_CONTROL, 0x52, 0x80);
 	cdcWriteReg(CDC_CONTROL, 0x51, 0x00);
-	
-	// Set remaining values
-	cdcWriteReg(CDC_CONTROL, 0x03, 0x44);
-	cdcWriteReg(CDC_CONTROL, 0x0D, 0x00);
-	cdcWriteReg(CDC_CONTROL, 0x0E, 0x80);
-	cdcWriteReg(CDC_CONTROL, 0x0F, 0x80);
-	cdcWriteReg(CDC_CONTROL, 0x10, 0x08);
-	cdcWriteReg(CDC_CONTROL, 0x14, 0x80);
-	cdcWriteReg(CDC_CONTROL, 0x15, 0x80);
-	cdcWriteReg(CDC_CONTROL, 0x16, 0x04);
-	cdcWriteReg(CDC_CONTROL, 0x1A, 0x01);
-	cdcWriteReg(CDC_CONTROL, 0x1E, 0x01);
-	cdcWriteReg(CDC_CONTROL, 0x24, 0x80);
-	cdcWriteReg(CDC_CONTROL, 0x33, 0x34);
-	cdcWriteReg(CDC_CONTROL, 0x34, 0x32);
-	cdcWriteReg(CDC_CONTROL, 0x35, 0x12);
-	cdcWriteReg(CDC_CONTROL, 0x36, 0x03);
-	cdcWriteReg(CDC_CONTROL, 0x37, 0x02);
-	cdcWriteReg(CDC_CONTROL, 0x38, 0x03);
-	cdcWriteReg(CDC_CONTROL, 0x3C, 0x19);
-	cdcWriteReg(CDC_CONTROL, 0x3D, 0x05);
-	cdcWriteReg(CDC_CONTROL, 0x44, 0x0F);
-	cdcWriteReg(CDC_CONTROL, 0x45, 0x38);
-	cdcWriteReg(CDC_CONTROL, 0x49, 0x00);
-	cdcWriteReg(CDC_CONTROL, 0x4A, 0x00);
-	cdcWriteReg(CDC_CONTROL, 0x4B, 0xEE);
-	cdcWriteReg(CDC_CONTROL, 0x4C, 0x10);
-	cdcWriteReg(CDC_CONTROL, 0x4D, 0xD8);
-	cdcWriteReg(CDC_CONTROL, 0x4E, 0x7E);
-	cdcWriteReg(CDC_CONTROL, 0x4F, 0xE3);
-	cdcWriteReg(CDC_CONTROL, 0x58, 0x7F);
-	cdcWriteReg(CDC_CONTROL, 0x74, 0xD2);
-	cdcWriteReg(CDC_CONTROL, 0x75, 0x2C);
-	cdcWriteReg(CDC_SOUND, 0x22, 0x70);
-	cdcWriteReg(CDC_SOUND, 0x2C, 0x20);
+
+	if (noSgba) {
+		// Set remaining values
+		cdcWriteReg(CDC_CONTROL, 0x03, 0x44);
+		cdcWriteReg(CDC_CONTROL, 0x0D, 0x00);
+		cdcWriteReg(CDC_CONTROL, 0x0E, 0x80);
+		cdcWriteReg(CDC_CONTROL, 0x0F, 0x80);
+		cdcWriteReg(CDC_CONTROL, 0x10, 0x08);
+		cdcWriteReg(CDC_CONTROL, 0x14, 0x80);
+		cdcWriteReg(CDC_CONTROL, 0x15, 0x80);
+		cdcWriteReg(CDC_CONTROL, 0x16, 0x04);
+		cdcWriteReg(CDC_CONTROL, 0x1A, 0x01);
+		cdcWriteReg(CDC_CONTROL, 0x1E, 0x01);
+		cdcWriteReg(CDC_CONTROL, 0x24, 0x80);
+		cdcWriteReg(CDC_CONTROL, 0x33, 0x34);
+		cdcWriteReg(CDC_CONTROL, 0x34, 0x32);
+		cdcWriteReg(CDC_CONTROL, 0x35, 0x12);
+		cdcWriteReg(CDC_CONTROL, 0x36, 0x03);
+		cdcWriteReg(CDC_CONTROL, 0x37, 0x02);
+		cdcWriteReg(CDC_CONTROL, 0x38, 0x03);
+		cdcWriteReg(CDC_CONTROL, 0x3C, 0x19);
+		cdcWriteReg(CDC_CONTROL, 0x3D, 0x05);
+		cdcWriteReg(CDC_CONTROL, 0x44, 0x0F);
+		cdcWriteReg(CDC_CONTROL, 0x45, 0x38);
+		cdcWriteReg(CDC_CONTROL, 0x49, 0x00);
+		cdcWriteReg(CDC_CONTROL, 0x4A, 0x00);
+		cdcWriteReg(CDC_CONTROL, 0x4B, 0xEE);
+		cdcWriteReg(CDC_CONTROL, 0x4C, 0x10);
+		cdcWriteReg(CDC_CONTROL, 0x4D, 0xD8);
+		cdcWriteReg(CDC_CONTROL, 0x4E, 0x7E);
+		cdcWriteReg(CDC_CONTROL, 0x4F, 0xE3);
+		cdcWriteReg(CDC_CONTROL, 0x58, 0x7F);
+		cdcWriteReg(CDC_CONTROL, 0x74, 0xD2);
+		cdcWriteReg(CDC_CONTROL, 0x75, 0x2C);
+		cdcWriteReg(CDC_SOUND, 0x22, 0x70);
+		cdcWriteReg(CDC_SOUND, 0x2C, 0x20);
+	}
 
 	// Finish up!
 	cdcReadReg (CDC_TOUCHCNT, 0x02);
@@ -550,6 +579,25 @@ int main (void) {
 #ifndef NO_SDMMC
 	sdRead = (dsiSD && dsiMode);
 #endif
+	toncset((u32*)0x06000000, 0, 0x8000);
+	if (wantToPatchDLDI) {
+		if (*(u32*)0x02FF4184 == 0x69684320) { // DLDI ' Chi' string in bootstub space + bootloader in DLDI driver space
+			const u16 dldiFileSize = 1 << *(u8*)0x02FF418D;
+			tonccpy((u32*)0x06000000, (u32*)0x02FF4180, dldiFileSize);
+			dldiRelocateBinary();
+
+			toncset((u32*)0x02FF4000, 0, 0x8180); // Clear bootstub + DLDI driver
+		} else if (*(u32*)0x02FF8004 == 0x69684320) { // DLDI ' Chi' string
+			const u16 dldiFileSize = 1 << *(u8*)0x02FF800D;
+			tonccpy((u32*)0x06000000, (u32*)0x02FF8000, (dldiFileSize > 0x4000) ? 0x4000 : dldiFileSize);
+			dldiClearBss();
+		} else if (*(u32*)0x02FF8000 == 0x53535A4C) { // LZ77 flag
+			dldiDecompressBinary();
+		} else {
+			return -1;
+		}
+	}
+
 	u32 fileCluster = storedFileCluster;
 	if (!loadFromRam) {
 		// Init card
@@ -614,7 +662,7 @@ int main (void) {
 	if ((dsiMode && ((ARM9_SRC==0x4000 && !(dsiFlags & BIT(0))) || dsMode || tscTgds))
 	|| (!dsiMode && REG_SCFG_EXT != 0 && memcmp(ndsHeaderTitle, "TWLMENUPP", 9) != 0 && memcmp(ndsHeaderTitle, "NDSBOOTSTRAP", 12) != 0)) {
 		NDSTouchscreenMode();
-		*(u16*)0x4000500 = 0x807F;
+		*(vu16*)0x4000500 = 0x807F;
 		if (dsMode) REG_GPIO_WIFI |= BIT(8);	// Old NDS-Wifi mode
 		i2cWriteRegister(I2C_PM, I2CREGPM_MMCPWR, 0);		// Press power button for auto-reset
 		i2cWriteRegister(I2C_PM, I2CREGPM_RESETFLAG, 1);	// Bootflag = Warmboot/SkipHealthSafety
@@ -633,6 +681,7 @@ int main (void) {
 	// Patch with DLDI if desired
 	if (wantToPatchDLDI) {
 		dldiPatchBinary ((u8*)((u32*)NDS_HEAD)[0x0A], ((u32*)NDS_HEAD)[0x0B]);
+		toncset((u32*)0x06000000, 0, 0x8000);
 	}
 #endif
 

@@ -12,6 +12,8 @@
 
 #include "sound.h"
 
+extern u16* colorTable;
+
 extern bool sdRemoveDetect;
 extern const char *unlaunchAutoLoadID;
 extern char unlaunchDevicePath[256];
@@ -40,7 +42,8 @@ void checkSdEject(void) {
 
 	// Show "SD removed" screen
 	mmEffectCancelAll();
-	snd().stopStream();
+	// snd().stopStream();
+	mmStop();
 
 	clearText();
 
@@ -54,11 +57,14 @@ void checkSdEject(void) {
 	updateText(false);
 
 	irqDisable(IRQ_VBLANK);
+	irqDisable(IRQ_HBLANK);
 
 	videoSetMode(MODE_5_2D | DISPLAY_BG2_ACTIVE);
 	//videoSetModeSub(MODE_5_2D | DISPLAY_BG2_ACTIVE);
 
 	REG_BLDY = 0;
+
+	while (dmaBusy(0)) { swiDelay(100); }
 
 	// Change to white text palette
 	u16 palette[] = {
@@ -67,6 +73,11 @@ void checkSdEject(void) {
 		0xD6B5,
 		0xFFFF,
 	};
+	if (colorTable) {
+		for (int i = 0; i < 4; i++) {
+			palette[i] = colorTable[palette[i] % 0x8000];
+		}
+	}
 	//tonccpy(BG_PALETTE + 0xF8, palette, sizeof(palette));
 	toncset16(BG_PALETTE, 0, 256);
 	toncset16(BG_PALETTE_SUB, 0, 256);

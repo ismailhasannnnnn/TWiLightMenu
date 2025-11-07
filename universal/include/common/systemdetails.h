@@ -20,14 +20,18 @@ public:
 	};
 
 	bool dsiWramAccess() { return _dsiWramAccess; }
+	bool dsiWramMirrored() { return _dsiWramMirrored; }
 	bool arm7SCFGLocked() { return _arm7SCFGLocked; }
+	bool scfgSdmmcEnabled() { return _scfgSdmmcEnabled; }
 	bool isRunFromSD() { return _isRunFromSD; }
 	bool isRegularDS() { return _isRegularDS; }
 	bool fatInitOk() { return _fatInitOk; }
 	bool useNitroFS() { return _nitroFsInitOk; }
-	bool isDSPhat() { return (_isRegularDS && !_isDSLite); }
-	bool isDSLite() { return (_isRegularDS && _isDSLite); }
-	bool dsDebugRam() { return (_dsDebugRam); }
+	bool isDSPhat() { return (_isRegularDS && _isDSPhat); }
+	bool isDSLite() { return (_isRegularDS && !_isDSPhat); }
+	bool hasRegulableBacklight() { return _hasRegulableBacklight; }
+	bool i2cBricked() { return _i2cBricked; }
+	bool dsDebugRam() { return _dsDebugRam; }
 	void initFilesystem(const char *runningPath);
 	void initArm7RegStatuses();
 	int batteryStatus();
@@ -36,10 +40,14 @@ public:
 
 private:
 	bool _dsiWramAccess;
+	bool _dsiWramMirrored;
 	bool _arm7SCFGLocked;
+	bool _scfgSdmmcEnabled;
 	bool _isRunFromSD;
 	bool _isRegularDS;
-	bool _isDSLite;
+	bool _isDSPhat;
+	bool _hasRegulableBacklight;
+	bool _i2cBricked;
 	bool _dsDebugRam;
 	bool _fatInitOk;
 	bool _fifoOk;

@@ -2,6 +2,7 @@ Please see the following list for which flashcart loader to use.
 
 Acekard 2(i) folder:
 - Acekard 2, 2.1, 2i
+- EDGEi (not the original EDGE or the original iEDGE)
 - R4 Ultra, R4i Ultra
 - R4iTT 3DS NEW, RTS
 - R4i3D NEW, 2012 or later
@@ -24,13 +25,7 @@ R4iLS folder:
 - r4isdhc.hk carts 2020 or later
 - R4infinity.com carts
 - white R4i-XDS 2014 carts
-
-Original R4 folder:
-- Original R4 (no SDHC)
-- M3 DS Simply
-
-Original R4SDHC folder:
-- Original R4SDHC (no URL)
+- R4xMP
 
 R4i Gold 1.54:
 - r4ids.cn carts without RTS or 3DS label

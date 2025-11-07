@@ -20,12 +20,15 @@
 
 #include <nds/arm9/dldi.h>
 #include "cheat.h"
+#include "common/tonccpy.h"
 #include "common/twlmenusettings.h"
 #include "common/systemdetails.h"
 #include "common/stringtool.h"
 #include <algorithm>
 
+#include "ndsheaderbanner.h"
 #include "perGameSettings.h"
+#include "myDSiMode.h"
 
 CheatCodelist::~CheatCodelist(void) {}
 
@@ -56,10 +59,8 @@ bool CheatCodelist::parse(const std::string& aFileName)
   {
     const char* usrcheatPath = sys().isRunFromSD() ? "sd:/_nds/TWiLightMenu/extras/usrcheat.dat" : "fat:/_nds/TWiLightMenu/extras/usrcheat.dat";
     loadPerGameSettings(aFileName.substr(aFileName.find_last_of('/') + 1));
-	if (ms().secondaryDevice && !(perGameSettings_useBootstrap == -1 ? ms().useBootstrap : perGameSettings_useBootstrap)) {
-		if ((memcmp(io_dldi_data->friendlyName, "R4(DS) - Revolution for DS", 26) == 0)
-		 || (memcmp(io_dldi_data->friendlyName, "R4TF", 4) == 0)
-		 || (memcmp(io_dldi_data->friendlyName, "R4iDSN", 6) == 0)
+	if (ms().secondaryDevice && !(perGameSettings_useBootstrap == -1 ? ms().useBootstrap : perGameSettings_useBootstrap) && ms().kernelUseable) {
+		if ((memcmp(io_dldi_data->friendlyName, "R4iDSN", 6) == 0)
 	   || (memcmp(io_dldi_data->friendlyName, "R4iTT", 5) == 0)
      || (memcmp(io_dldi_data->friendlyName, "Acekard AK2", 0xB) == 0)
      || (memcmp(io_dldi_data->friendlyName, "Ace3DS+", 7) == 0)) {
@@ -97,7 +98,7 @@ bool CheatCodelist::searchCheatData(FILE* aDat,u32 gamecode,u32 crc32,long& aPos
 
   while (!done)
   {
-    memcpy(&idx,&nidx,sizeof(idx));
+    tonccpy(&idx,&nidx,sizeof(idx));
     fread(&nidx,sizeof(nidx),1,aDat);
     if (gamecode==idx._gameCode&&crc32==idx._crc32)
     {
@@ -164,7 +165,7 @@ bool CheatCodelist::parseInternal(FILE* aDat,u32 gamecode,u32 crc32)
         _data.push_back(cParsedItem(cheatName,cheatNote,flagItem|((*ccode&0xff000000)?selectValue:0),dataPos+(((char*)ccode+3)-buffer)));
         if ((*ccode&0xff000000)&&(flagItem&cParsedItem::EOne)) selectValue=0;
         _data.back()._cheat.resize(cheatDataLen);
-        memcpy(_data.back()._cheat.data(),cheatData,cheatDataLen*4);
+        tonccpy(_data.back()._cheat.data(),cheatData,cheatDataLen*4);
       }
       cc++;
       ccode=(u32*)((u32)ccode+(((*ccode&0x00ffffff)+1)*4));

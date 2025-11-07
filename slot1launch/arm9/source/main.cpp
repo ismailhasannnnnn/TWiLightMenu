@@ -33,7 +33,10 @@
 #include "launch_engine.h"
 #include "crc.h"
 
-sNDSHeader ndsHeader;
+struct {
+sNDSHeader header;
+char padding[0x200 - sizeof(sNDSHeader)];
+} ndsHeader;
 
 bool consoleInited = false;
 bool scfgUnlock = false;
@@ -42,6 +45,7 @@ bool TWLCLK = false;	// false == NTR, true == TWL
 int TWLVRAM = 0;
 bool TWLTOUCH = false;
 bool soundFreq = false;
+bool sleepMode = true;
 bool runCardEngine = false;
 bool EnableSD = false;
 bool ignoreBlacklists = false;
@@ -95,8 +99,9 @@ int main() {
 			CIniFile settingsini("/_nds/TWiLightMenu/settings.ini");
 
 			ignoreBlacklists = settingsini.GetInt("SRLOADER","IGNORE_BLACKLISTS",false);
-			TWLTOUCH = settingsini.GetInt("SRLOADER","SLOT1_TOUCH_MODE",0);
+			// TWLTOUCH = settingsini.GetInt("SRLOADER","SLOT1_TOUCH_MODE",0);
 			soundFreq = settingsini.GetInt("NDS-BOOTSTRAP","SOUND_FREQ",0);
+			sleepMode = settingsini.GetInt("SRLOADER","SLEEP_MODE",1);
 			runCardEngine = settingsini.GetInt("SRLOADER","SLOT1_CARDENGINE",1);
 			EnableSD = settingsini.GetInt("SRLOADER","SLOT1_ENABLESD",0);
 
@@ -113,7 +118,7 @@ int main() {
 			cardReadHeader((uint8*)&ndsHeader);
 
 			char gameTid[5];
-			tonccpy(gameTid, ndsHeader.gameCode, 4);
+			tonccpy(gameTid, ndsHeader.header.gameCode, 4);
 			char pergamefilepath[256];
 			sprintf(pergamefilepath, "/_nds/TWiLightMenu/gamesettings/slot1/%s.ini", gameTid);
 
@@ -134,7 +139,7 @@ int main() {
 			//	consoleDemoInit();
 			//}
 
-			if (!TWLCLK && (ndsHeader.unitCode == 0 || !TWLMODE)) {
+			if (!TWLCLK && (ndsHeader.header.unitCode == 0 || !TWLMODE)) {
 				//if (settingsini.GetInt("TWL-MODE","DEBUG",0) == 1) {
 				//	printf("TWL_CLOCK ON\n");		
 				//}
@@ -182,7 +187,7 @@ int main() {
 			cardReadHeader((uint8*)&ndsHeader);
 		}
 
-		if (ndsHeader.unitCode > 0 && TWLMODE) {
+		if (ndsHeader.header.unitCode > 0 && TWLMODE) {
 			runCardEngine = false;
 		}
 	} else {
@@ -225,7 +230,7 @@ int main() {
 			for (int i = 0; i < 30; i++) { swiWaitForVBlank(); }
 		} else if (io_dldi_data->ioInterface.features & FEATURE_SLOT_GBA) {
 			// Check header CRC
-			if (ndsHeader.headerCRC16 != swiCRC16(0xFFFF, (void*)&ndsHeader, 0x15E)) {
+			if (ndsHeader.header.headerCRC16 != swiCRC16(0xFFFF, (void*)&ndsHeader, 0x15E)) {
 				consoleDemoInit();
 				consoleInited = true;
 				iprintf ("Please reboot the console with\n");
@@ -249,7 +254,8 @@ int main() {
 				}
 				tonccpy((void*)0x023F0000, cheatData, 0x8000);
 			}
-			runLaunchEngine ((memcmp(ndsHeader.gameCode, "UBRP", 4) == 0 || memcmp(ndsHeader.gameCode, "AMFE", 4) == 0 || memcmp(ndsHeader.gameCode, "ALXX", 4) == 0), (memcmp(ndsHeader.gameCode, "UBRP", 4) == 0));
+			const auto& gameCode = ndsHeader.header.gameCode;
+			runLaunchEngine ((memcmp(gameCode, "UBRP", 4) == 0 || memcmp(gameCode, "AMFE", 4) == 0 || memcmp(gameCode, "ALXX", 4) == 0 || memcmp(ndsHeader.header.gameTitle, "D!S!XTREME", 10) == 0), (memcmp(gameCode, "UBRP", 4) == 0));
 		}
 	}
 	return 0;

@@ -27,6 +27,7 @@
 #include "common/gl2d.h"
 #include "common/tonccpy.h"
 #include "graphics.h"
+// #include "common/ColorLut.h"
 #include "common/lodepng.h"
 
 #define CONSOLE_SCREEN_WIDTH 32
@@ -48,10 +49,16 @@ bool secondBuffer = false;
 
 u16 frameBuffer[2][256*192];
 u16 frameBufferBot[2][256*192];
-u16* dsiSplashLocation = (u16*)0x02600000;
+u16* colorTable = NULL;
+bool invertedColors = false;
+bool noWhiteFade = false;
 
 // Ported from PAlib (obsolete)
 void SetBrightness(u8 screen, s8 bright) {
+	if ((invertedColors && bright != 0) || (noWhiteFade && bright > 0)) {
+		bright -= bright*2; // Invert brightness to match the inverted colors
+	}
+
 	u16 mode = 1 << 14;
 
 	if (bright < 0) {
@@ -59,10 +66,10 @@ void SetBrightness(u8 screen, s8 bright) {
 		bright = -bright;
 	}
 	if (bright > 31) bright = 31;
-	*(u16*)(0x0400006C + (0x1000 * screen)) = bright + mode;
+	*(vu16*)(0x0400006C + (0x1000 * screen)) = bright + mode;
 }
 
-u16 convertVramColorToGrayscale(u16 val) {
+/* u16 convertVramColorToGrayscale(u16 val) {
 	u8 b,g,r,max,min;
 	b = ((val)>>10)&31;
 	g = ((val)>>5)&31;
@@ -77,10 +84,10 @@ u16 convertVramColorToGrayscale(u16 val) {
 	max = (max + min) / 2;
 
 	return 32768|(max<<10)|(max<<5)|(max);
-}
+} */
 
 void vBlankHandler() {
-	if (fadeType == true) {
+	if (fadeType) {
 		screenBrightness--;
 		if (screenBrightness < 0) screenBrightness = 0;
 	} else {
@@ -105,28 +112,25 @@ void LoadBMP(void) {
 	std::vector<unsigned char> image;
 	unsigned width, height;
 
-	lodepng::decode(image, width, height, (sys().isDSPhat() ? "nitro:/graphics/logoPhat_rocketrobz.png" : "nitro:/graphics/logo_rocketrobz.png"));
+	lodepng::decode(image, width, height, ms().rocketRobzLogo ? (sys().isDSPhat() ? "nitro:/graphics/logoPhat_rocketrobz.png" : "nitro:/graphics/logo_rocketrobz.png") : "nitro:/graphics/logo_rocketrobzHide.png");
 	bool alternatePixel = false;
 	for (unsigned i=0;i<image.size()/4;i++) {
 		image[(i*4)+3] = 0;
 		if (alternatePixel) {
-			if (image[(i*4)] >= 0x4) {
-				image[(i*4)] -= 0x4;
+			if (image[(i*4)] >= 0x4 && image[(i*4)] < 0xFC) {
+				image[(i*4)] += 0x4;
 				image[(i*4)+3] |= BIT(0);
 			}
-			if (image[(i*4)+1] >= 0x4) {
-				image[(i*4)+1] -= 0x4;
+			if (image[(i*4)+1] >= 0x4 && image[(i*4)+1] < 0xFC) {
+				image[(i*4)+1] += 0x4;
 				image[(i*4)+3] |= BIT(1);
 			}
-			if (image[(i*4)+2] >= 0x4) {
-				image[(i*4)+2] -= 0x4;
+			if (image[(i*4)+2] >= 0x4 && image[(i*4)+2] < 0xFC) {
+				image[(i*4)+2] += 0x4;
 				image[(i*4)+3] |= BIT(2);
 			}
 		}
 		u16 color = image[i*4]>>3 | (image[(i*4)+1]>>3)<<5 | (image[(i*4)+2]>>3)<<10 | BIT(15);
-		if (ms().colorMode == 1) {
-			color = convertVramColorToGrayscale(color);
-		}
 		if (ms().macroMode) {
 			frameBuffer[0][i] = color;
 		} else {
@@ -134,29 +138,26 @@ void LoadBMP(void) {
 		}
 		if (alternatePixel) {
 			if (image[(i*4)+3] & BIT(0)) {
-				image[(i*4)] += 0x4;
-			}
-			if (image[(i*4)+3] & BIT(1)) {
-				image[(i*4)+1] += 0x4;
-			}
-			if (image[(i*4)+3] & BIT(2)) {
-				image[(i*4)+2] += 0x4;
-			}
-		} else {
-			if (image[(i*4)] >= 0x4) {
 				image[(i*4)] -= 0x4;
 			}
-				if (image[(i*4)+1] >= 0x4) {
+			if (image[(i*4)+3] & BIT(1)) {
 				image[(i*4)+1] -= 0x4;
 			}
-			if (image[(i*4)+2] >= 0x4) {
+			if (image[(i*4)+3] & BIT(2)) {
 				image[(i*4)+2] -= 0x4;
+			}
+		} else {
+			if (image[(i*4)] >= 0x4 && image[(i*4)] < 0xFC) {
+				image[(i*4)] += 0x4;
+			}
+			if (image[(i*4)+1] >= 0x4 && image[(i*4)+1] < 0xFC) {
+				image[(i*4)+1] += 0x4;
+			}
+			if (image[(i*4)+2] >= 0x4 && image[(i*4)+2] < 0xFC) {
+				image[(i*4)+2] += 0x4;
 			}
 		}
 		color = image[i*4]>>3 | (image[(i*4)+1]>>3)<<5 | (image[(i*4)+2]>>3)<<10 | BIT(15);
-		if (ms().colorMode == 1) {
-			color = convertVramColorToGrayscale(color);
-		}
 		if (ms().macroMode) {
 			frameBuffer[1][i] = color;
 		} else {
@@ -166,6 +167,19 @@ void LoadBMP(void) {
 		alternatePixel = !alternatePixel;
 	}
 	image.clear();
+	if (colorTable) {
+		if (ms().macroMode) {
+			for (int i=0; i<256*192; i++) {
+				frameBuffer[0][i] = colorTable[frameBuffer[0][i] % 0x8000] | BIT(15);
+				frameBuffer[1][i] = colorTable[frameBuffer[1][i] % 0x8000] | BIT(15);
+			}
+		} else {
+			for (int i=0; i<256*192; i++) {
+				frameBufferBot[0][i] = colorTable[frameBufferBot[0][i] % 0x8000] | BIT(15);
+				frameBufferBot[1][i] = colorTable[frameBufferBot[1][i] % 0x8000] | BIT(15);
+			}
+		}
+	}
 	doubleBuffer = true;
 	if (ms().macroMode) {
 		fadeType = true;
@@ -207,7 +221,6 @@ void runGraphicIrq(void) {
 }
 
 bool screenFadedIn(void) { return (screenBrightness == 0); }
-
 bool screenFadedOut(void) { return (screenBrightness > 24); }
 
 void loadTitleGraphics() {
@@ -247,8 +260,8 @@ void loadTitleGraphics() {
 	toncset16(BG_PALETTE, 0, 256);
 	toncset16(BG_PALETTE_SUB, 0, 256);
 
-	twlMenuVideo_loadTopGraphics();
-
 	// Display TWiLightMenu++ logo
 	LoadBMP();
+
+	twlMenuVideo_loadTopGraphics();
 }

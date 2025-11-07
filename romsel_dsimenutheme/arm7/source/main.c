@@ -30,6 +30,7 @@
 #include <nds.h>
 #include <string.h>
 #include <maxmod7.h>
+#include "common/isPhatCheck.h"
 #include "common/arm7status.h"
 
 void my_touchInit();
@@ -40,13 +41,13 @@ u8 my_i2cWriteRegister(u8 device, u8 reg, u8 data);
 
 #define BIT_SET(c, n) ((c) << (n))
 
-#define SNDEXCNT (*(vu16*)0x4004700)
 #define SD_IRQ_STATUS (*(vu32*)0x400481C)
 
 volatile int timeTilVolumeLevelRefresh = 0;
 static int soundVolume = 127;
 volatile int rebootTimer = 0;
-volatile int status = 0;
+volatile u32 status = 0;
+static bool i2cBricked = false;
 
 //static bool gotCartHeader = false;
 
@@ -64,7 +65,7 @@ void soundFadeOut() {
 void ReturntoDSiMenu() {
 //---------------------------------------------------------------------------------
 	nocashMessage("ARM7 ReturnToDSiMenu");
-	if (isDSiMode()) {
+	if (isDSiMode() && !i2cBricked) {
 		i2cWriteRegister(0x4A, 0x70, 0x01);		// Bootflag = Warmboot/SkipHealthSafety
 		i2cWriteRegister(0x4A, 0x11, 0x01);		// Reset to DSi Menu
 	} else {
@@ -110,6 +111,8 @@ int main() {
 	*(u16*)0x02FFFC36 = *(u16*)0x0800015E;	// Header CRC16
 	*(u32*)0x02FFFC38 = *(u32*)0x0800000C;	// Game Code
 
+	*(u32*)0x02FFFDF0 = REG_SCFG_EXT;
+
 	REG_SOUNDCNT |= SOUND_ENABLE;
 	writePowerManagement(PM_CONTROL_REG, ( readPowerManagement(PM_CONTROL_REG) & ~PM_SOUND_MUTE ) | PM_SOUND_AMP );
 	powerOn(POWER_SOUND);
@@ -126,7 +129,7 @@ int main() {
 
 	mmInstall(FIFO_MAXMOD);
 	SetYtrigger(80);
-	
+
 	installSoundFIFO();
 	my_installSystemFIFO();
 
@@ -146,33 +149,47 @@ int main() {
 		*(vu32*)0x037C0000 = wordBak;
 	}
 
+	if (isDSiMode() || REG_SCFG_EXT != 0) {
+		const u8 i2cVer = my_i2cReadRegister(0x4A, 0);
+		i2cBricked = (i2cVer == 0 || i2cVer == 0xFF);
+	}
+
 	u8 pmBacklight = readPowerManagement(PM_BACKLIGHT_LEVEL);
 
 	// 01: Fade Out
 	// 02: Return
-	// 03: status (Bit 0: isDSLite, Bit 1: scfgEnabled, Bit 2: sndExcnt)
-	
+	// 03: status (Bit 0: hasRegulableBacklight, Bit 1: scfgSdmmcEnabled, Bit 2: REG_SNDEXTCNT, Bit 3: isDSPhat, Bit 4: i2cBricked)
+
 
 	// 03: Status: Init/Volume/Battery/SD
 	// https://problemkaputt.de/gbatek.htm#dsii2cdevice4ahbptwlchip
 	// Battery is 7 bits -- bits 0-7
 	// Volume is 00h to 1Fh = 5 bits -- bits 8-12
 	// SD status -- bits 13-14
-	// Init status -- bits 15-17 (Bit 0 (15): isDSLite, Bit 1 (16): scfgEnabled, Bit 2 (17): sndExcnt)
+	// Init status -- bits 15-18 (Bit 0 (15): hasRegulableBacklight, Bit 1 (16): scfgSdmmcEnabled, Bit 2 (17): REG_SNDEXTCNT, Bit 3 (18): isDSPhat, Bit 4 (19): i2cBricked)
 
-	u8 initStatus = (BIT_SET(!!(SNDEXCNT), SNDEXCNT_BIT) 
-									| BIT_SET(!!(REG_SCFG_EXT), REGSCFG_BIT) 
-									| BIT_SET(!!(pmBacklight & BIT(4) || pmBacklight & BIT(5) || pmBacklight & BIT(6) || pmBacklight & BIT(7)), DSLITE_BIT));
+	*(vu32*)0x4004820 = 0x8B7F0305;
+
+	u8 initStatus = (BIT_SET(!!(REG_SNDEXTCNT), SNDEXTCNT_BIT)
+									| BIT_SET(*(vu32*)0x4004820, SCFGSDMMC_BIT)
+									| BIT_SET(!!(pmBacklight & BIT(4) || pmBacklight & BIT(5) || pmBacklight & BIT(6) || pmBacklight & BIT(7)), BACKLIGHT_BIT)
+									| BIT_SET(isPhat(), DSPHAT_BIT)
+									| BIT_SET(i2cBricked, I2CBRICKED_BIT));
+
+	*(vu32*)0x4004820 = 0;
 
 	status = (status & ~INIT_MASK) | ((initStatus << INIT_OFF) & INIT_MASK);
 	fifoSendValue32(FIFO_USER_03, status);
 
-	if (SNDEXCNT == 0) {
+	if (REG_SNDEXTCNT == 0) {
 		if (pmBacklight & 0xF0) { // DS Lite
 			int backlightLevel = pmBacklight & 3; // Brightness
 			*(int*)0x02003000 = backlightLevel;
 		}
 	}
+
+	bool reportBacklightLevelChange = false;
+	u8 currentBacklightLevel;
 
 	// Keep the ARM7 mostly idle
 	while (!exitflag) {
@@ -185,12 +202,12 @@ int main() {
 			gotCartHeader = true;
 		}*/
 
-		
+
 		timeTilVolumeLevelRefresh++;
 		if (timeTilVolumeLevelRefresh == 8) {
-			if (isDSiMode() || REG_SCFG_EXT != 0) { //vol
+			if ((isDSiMode() || REG_SCFG_EXT != 0) && !i2cBricked) { //vol
 				status = (status & ~VOL_MASK) | ((my_i2cReadRegister(I2C_PM, I2CREGPM_VOL) << VOL_OFF) & VOL_MASK);
-				status = (status & ~BAT_MASK) | ((my_i2cReadRegister(I2C_PM, I2CREGPM_BATTERY) << BAT_OFF) & BAT_MASK);				
+				status = (status & ~BAT_MASK) | ((my_i2cReadRegister(I2C_PM, I2CREGPM_BATTERY) << BAT_OFF) & BAT_MASK);
 			} else {
 				int battery = (readPowerManagement(PM_BATTERY_REG) & 1)?3:15;
 				int backlight = readPowerManagement(PM_BACKLIGHT_LEVEL);
@@ -214,6 +231,17 @@ int main() {
 
 		if (fifoCheckValue32(FIFO_USER_02)) {
 			ReturntoDSiMenu();
+		}
+
+		if (fifoCheckValue32(FIFO_USER_04)) {
+			reportBacklightLevelChange = fifoGetValue32(FIFO_USER_04) == 1;
+			if (reportBacklightLevelChange) currentBacklightLevel = my_i2cReadRegister(I2C_PM, 0x41);
+		}
+		if (reportBacklightLevelChange) {
+			if (my_i2cReadRegister(I2C_PM, 0x41) != currentBacklightLevel) {
+				fifoSendValue32(FIFO_USER_04, 1);
+				reportBacklightLevelChange = false;
+			}
 		}
 
 		if (*(u32*)(0x2FFFD0C) == 0x54494D52) {

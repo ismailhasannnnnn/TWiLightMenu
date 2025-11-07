@@ -7,6 +7,9 @@
 
 #define CHECK_BIT(v, n) (((v) >> (n)) & 1)
 
+#define FLASHM_BACKUPHEADER 0x3f680
+#define FLASHME_MAJOR_VER 0x17c
+
 // Make this link C-like for volatility
 extern "C" {
 	static volatile int _batteryLevel = 0;
@@ -29,34 +32,42 @@ SystemDetails::SystemDetails()
 
 	_isRunFromSD = false;
 	_dsiWramAccess = false;
+	_dsiWramMirrored = false;
 	_arm7SCFGLocked = false;
+	_scfgSdmmcEnabled = false;
 	_isRegularDS = true;
-	_isDSLite = false;
+	_isDSPhat = false;
+	_hasRegulableBacklight = true;
+	_i2cBricked = false;
 	_nitroFsInitOk = false;
 	_fatInitOk = false;
 	_fifoOk = false;
 
 	fifoWaitValue32(FIFO_USER_03);
 
-	// status (Bit 0: isDSLite, Bit 1: scfgEnabled, Bit 2: sndExcnt)
-	u32 status = ((fifoGetValue32(FIFO_USER_03)) >> INIT_OFF);
+	const u32 status = ((fifoGetValue32(FIFO_USER_03)) >> INIT_OFF);
 
 	if (isDSiMode()) {
 		u32 wordBak = *(vu32*)0x03700000;
 		*(vu32*)0x03700000 = 0x414C5253;
 		_dsiWramAccess = *(vu32*)0x03700000 == 0x414C5253;
+		_dsiWramMirrored = (*(vu32*)0x03700000 == 0x414C5253 && *(vu32*)0x03708000 == 0x414C5253);
 		*(vu32*)0x03700000 = wordBak;
 	}
 
-	if (CHECK_BIT(status, REGSCFG_BIT) == 0) {
-		_arm7SCFGLocked = true; // If TWiLight Menu++ is being run from DSiWarehax or flashcard, then arm7 SCFG is locked.
-	}
+	_arm7SCFGLocked = (*(u32*)0x02FFFDF0 == 0); // If TWiLight Menu++ is being run from DSiWarehax or flashcard, then arm7 SCFG is locked.
 
-	if (CHECK_BIT(status, SNDEXCNT_BIT) != 0) {
+	_scfgSdmmcEnabled = (CHECK_BIT(status, SCFGSDMMC_BIT) != 0);
+
+	if (CHECK_BIT(status, SNDEXTCNT_BIT) != 0) {
 		_isRegularDS = false; // If sound frequency setting is found, then the console is not a DS Phat/Lite
 	}
 
-	_isDSLite = CHECK_BIT(status, DSLITE_BIT);
+	_isDSPhat = CHECK_BIT(status, DSPHAT_BIT) != 0;
+
+	_hasRegulableBacklight = CHECK_BIT(status, BACKLIGHT_BIT) != 0;
+
+	_i2cBricked = CHECK_BIT(status, I2CBRICKED_BIT) != 0;
 
 	if (!dsiFeatures()) {
 		u32 wordBak = *(vu32*)0x02800000;
